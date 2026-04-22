@@ -1,0 +1,135 @@
+"""Single player Monte Carlo draw within a game realization."""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+import numpy as np
+
+from ironclad.simulation.distributions import (
+    truncated_normal,
+    poisson_draw,
+    bernoulli,
+)
+
+
+@dataclass
+class PlayerContext:
+    player_id: str
+    player_name: str
+    team: str
+    position: str
+    is_home: bool
+    availability: float
+    # Model outputs
+    targets_projected: float
+    carries_projected: float
+    pass_attempts_projected: float
+    catch_rate: float
+    yards_per_target: float
+    yards_per_carry: float
+    td_rate_per_target: float
+    td_rate_per_carry: float
+    yards_per_target_std: float = 5.0
+    yards_per_carry_std: float = 3.5
+
+
+@dataclass
+class PlayerDrawResult:
+    player_id: str
+    player_name: str
+    team: str
+    position: str
+    is_home: bool
+    # Raw draw results
+    targets: int = 0
+    receptions: int = 0
+    rec_yards: float = 0.0
+    carries: int = 0
+    rush_yards: float = 0.0
+    pass_attempts: int = 0
+    completions: int = 0
+    pass_yards: float = 0.0
+    tds: int = 0
+    played: bool = True
+
+
+class PlayerDraw:
+    """Draws one player's stat line within a game realization."""
+
+    def draw(
+        self,
+        rng: np.random.Generator,
+        ctx: PlayerContext,
+        team_pass_att: int,
+        team_rush_att: int,
+    ) -> PlayerDrawResult:
+        result = PlayerDrawResult(
+            player_id=ctx.player_id,
+            player_name=ctx.player_name,
+            team=ctx.team,
+            position=ctx.position,
+            is_home=ctx.is_home,
+        )
+
+        # Availability Bernoulli gate
+        if not bernoulli(rng, ctx.availability):
+            result.played = False
+            return result
+
+        # Scale projected volume to actual team volume in this draw
+        pass_scale = team_pass_att / 32.0 if team_pass_att > 0 else 0.0
+        rush_scale = team_rush_att / 25.0 if team_rush_att > 0 else 0.0
+
+        # ── Receiving ─────────────────────────────────────────────────────────
+        if ctx.position in ("WR", "TE", "RB", "FB") and ctx.targets_projected > 0:
+            lam = max(0.0, ctx.targets_projected * pass_scale)
+            targets = poisson_draw(rng, lam)
+            receptions = 0
+            rec_yards = 0.0
+            for _ in range(targets):
+                if bernoulli(rng, ctx.catch_rate or 0.65):
+                    receptions += 1
+                    yds = float(truncated_normal(
+                        rng,
+                        mean=ctx.yards_per_target or 8.0,
+                        std=ctx.yards_per_target_std,
+                        low=-5.0, high=80.0,
+                    )[0])
+                    rec_yards += yds
+            result.targets = targets
+            result.receptions = receptions
+            result.rec_yards = rec_yards
+
+        # ── Rushing ───────────────────────────────────────────────────────────
+        if ctx.carries_projected > 0:
+            lam = max(0.0, ctx.carries_projected * rush_scale)
+            carries = poisson_draw(rng, lam)
+            rush_yards = 0.0
+            for _ in range(carries):
+                yds = float(truncated_normal(
+                    rng,
+                    mean=ctx.yards_per_carry or 4.2,
+                    std=ctx.yards_per_carry_std,
+                    low=-10.0, high=80.0,
+                )[0])
+                rush_yards += yds
+            result.carries = carries
+            result.rush_yards = rush_yards
+
+        # ── Passing (QB) ──────────────────────────────────────────────────────
+        if ctx.position == "QB" and ctx.pass_attempts_projected > 0:
+            lam = max(0.0, ctx.pass_attempts_projected * pass_scale)
+            pass_att = poisson_draw(rng, lam)
+            comp_rate = ctx.catch_rate or 0.64
+            completions = int(rng.binomial(pass_att, comp_rate))
+            pass_yards = max(0.0, float(rng.normal(
+                completions * (ctx.yards_per_target or 8.5),
+                completions * 3.5,
+            ))) if completions > 0 else 0.0
+            result.pass_attempts = pass_att
+            result.completions = completions
+            result.pass_yards = pass_yards
+
+        # ── TDs (assigned during reconciliation; set 0 here) ──────────────────
+        result.tds = 0
+        return result

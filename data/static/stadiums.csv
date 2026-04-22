@@ -1,0 +1,34 @@
+stadium_id,stadium_name,team,city,state,country,is_dome,surface,altitude_ft,capacity,lat,lon
+ARI,State Farm Stadium,ARI,Glendale,AZ,USA,true,turf,1083,63400,33.5276,-112.2626
+ATL,Mercedes-Benz Stadium,ATL,Atlanta,GA,USA,true,turf,1050,71000,33.7554,-84.4009
+BAL,M&T Bank Stadium,BAL,Baltimore,MD,USA,false,grass,43,71008,39.2780,-76.6227
+BUF,Highmark Stadium,BUF,Orchard Park,NY,USA,false,turf,600,71608,42.7738,-78.7870
+CAR,Bank of America Stadium,CAR,Charlotte,NC,USA,false,grass,751,74455,35.2258,-80.8528
+CHI,Soldier Field,CHI,Chicago,IL,USA,false,grass,594,61500,41.8623,-87.6167
+CIN,Paycor Stadium,CIN,Cincinnati,OH,USA,false,turf,489,65515,39.0955,-84.5161
+CLE,Cleveland Browns Stadium,CLE,Cleveland,OH,USA,false,grass,653,67895,41.5061,-81.6995
+DAL,AT&T Stadium,DAL,Arlington,TX,USA,true,turf,616,80000,32.7480,-97.0929
+DEN,Empower Field at Mile High,DEN,Denver,CO,USA,false,grass,5280,76125,39.7439,-105.0201
+DET,Ford Field,DET,Detroit,MI,USA,true,turf,600,65000,42.3400,-83.0456
+GB,Lambeau Field,GB,Green Bay,WI,USA,false,grass,640,81441,44.5013,-88.0622
+HOU,NRG Stadium,HOU,Houston,TX,USA,true,grass,43,72220,29.6847,-95.4107
+IND,Lucas Oil Stadium,IND,Indianapolis,IN,USA,true,turf,715,67000,39.7601,-86.1639
+JAX,TIAA Bank Field,JAX,Jacksonville,FL,USA,false,grass,12,69132,30.3239,-81.6373
+KC,GEHA Field at Arrowhead Stadium,KC,Kansas City,MO,USA,false,grass,1063,76416,39.0489,-94.4839
+LA,SoFi Stadium,LA,Inglewood,CA,USA,true,turf,96,70240,33.9535,-118.3392
+LAC,SoFi Stadium,LAC,Inglewood,CA,USA,true,turf,96,70240,33.9535,-118.3392
+LAR,SoFi Stadium,LAR,Inglewood,CA,USA,true,turf,96,70240,33.9535,-118.3392
+LV,Allegiant Stadium,LV,Las Vegas,NV,USA,true,grass,2001,65000,36.0908,-115.1839
+MIA,Hard Rock Stadium,MIA,Miami Gardens,FL,USA,false,grass,6,65326,25.9580,-80.2389
+MIN,U.S. Bank Stadium,MIN,Minneapolis,MN,USA,true,turf,830,66860,44.9736,-93.2575
+NE,Gillette Stadium,NE,Foxborough,MA,USA,false,turf,161,65878,42.0909,-71.2643
+NO,Caesars Superdome,NO,New Orleans,LA,USA,true,turf,3,73208,29.9511,-90.0812
+NYG,MetLife Stadium,NYG,East Rutherford,NJ,USA,false,turf,3,82500,40.8135,-74.0745
+NYJ,MetLife Stadium,NYJ,East Rutherford,NJ,USA,false,turf,3,82500,40.8135,-74.0745
+PHI,Lincoln Financial Field,PHI,Philadelphia,PA,USA,false,grass,39,69596,39.9008,-75.1675
+PIT,Acrisure Stadium,PIT,Pittsburgh,PA,USA,false,grass,730,68400,40.4468,-80.0158
+SEA,Lumen Field,SEA,Seattle,WA,USA,false,turf,17,69000,47.5952,-122.3316
+SF,Levi's Stadium,SF,Santa Clara,CA,USA,false,grass,52,68500,37.4033,-121.9694
+TB,Raymond James Stadium,TB,Tampa,FL,USA,false,grass,9,65618,27.9759,-82.5033
+TEN,Nissan Stadium,TEN,Nashville,TN,USA,false,grass,440,69143,36.1665,-86.7713
+WAS,FedExField,WAS,Landover,MD,USA,false,grass,68,82000,38.9076,-76.8645
