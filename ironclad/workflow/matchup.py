@@ -17,6 +17,7 @@ from ironclad.features.player_features import PlayerFeatureBuilder
 from ironclad.simulation.engine import MonteCarloEngine
 from ironclad.report.builder import build_report_context
 from ironclad.report.markdown_renderer import render_markdown
+from ironclad.report.html_renderer import render_html
 from ironclad.report.csv_exporter import export_player_csv, export_team_csv
 from ironclad.store.connection import get_connection
 from ironclad.store.schema import create_all_tables
@@ -117,6 +118,8 @@ class MatchupWorkflow:
         base = output_dir / f"{game_id}_pregame_{ts_str}"
 
         md_path = render_markdown(ctx, Path(str(base) + ".md"))
+        if fmt == "both":
+            render_html(ctx, Path(str(base) + ".html"))
         export_player_csv(result, Path(str(base) + "_players.csv"))
         export_team_csv(result, Path(str(base) + "_teams.csv"))
 

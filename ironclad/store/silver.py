@@ -236,8 +236,31 @@ class SilverTransformer:
         df["opponent"] = np.where(df["is_home"], df["away_team"], df["home_team"])
         df = df.drop(columns=["home_team", "away_team"], errors="ignore")
 
+        # Enrich position from bronze.rosters (latest week for each season)
+        try:
+            rosters = self._conn.execute("""
+                SELECT player_id, position,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY player_id, season
+                           ORDER BY week DESC, _ingest_ts DESC
+                       ) AS rn,
+                       season
+                FROM bronze.rosters
+                WHERE position IS NOT NULL AND position != ''
+            """).df()
+            rosters = rosters[rosters["rn"] == 1][["player_id", "season", "position"]]
+            if not rosters.empty:
+                df = df.merge(rosters, on=["player_id", "season"], how="left", suffixes=("_old", ""))
+                if "position_old" in df.columns:
+                    df["position"] = df["position"].fillna(df["position_old"])
+                    df = df.drop(columns=["position_old"])
+        except Exception as exc:
+            logger.debug("Position enrichment from rosters failed: %s", exc)
+
         if "position" not in df.columns:
             df["position"] = "UNK"
+        else:
+            df["position"] = df["position"].fillna("UNK")
         return self._writer.write_player_game_stats(df)
 
     # ── silver.player_weekly_status ───────────────────────────────────────────

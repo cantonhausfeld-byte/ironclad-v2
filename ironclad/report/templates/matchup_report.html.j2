@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ away_team }} @ {{ home_team }} — ironclad-v2</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #1a1a1a; background: #fafafa; }
+  h1 { font-size: 1.6rem; margin-bottom: 0.2rem; }
+  h2 { font-size: 1.2rem; border-bottom: 2px solid #333; padding-bottom: 4px; margin-top: 2rem; }
+  h3 { font-size: 1rem; margin-top: 1.2rem; color: #444; }
+  table { border-collapse: collapse; width: 100%; margin-top: 0.6rem; font-size: 0.9rem; }
+  th { background: #2c3e50; color: #fff; padding: 6px 10px; text-align: left; }
+  td { border-bottom: 1px solid #ddd; padding: 5px 10px; }
+  tr:nth-child(even) td { background: #f0f0f0; }
+  .meta { color: #666; font-size: 0.85rem; margin-bottom: 0.5rem; }
+  .confidence { display: inline-block; padding: 3px 10px; border-radius: 4px; font-weight: bold; font-size: 0.85rem; }
+  .HIGH { background: #27ae60; color: #fff; }
+  .MEDIUM { background: #e67e22; color: #fff; }
+  .LOW { background: #e74c3c; color: #fff; }
+  .footer { margin-top: 3rem; color: #999; font-size: 0.75rem; border-top: 1px solid #ddd; padding-top: 0.5rem; }
+  .prob-bar { display: flex; height: 20px; border-radius: 4px; overflow: hidden; margin: 8px 0; }
+  .prob-home { background: #2980b9; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 0.8rem; font-weight: bold; }
+  .prob-away { background: #c0392b; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 0.8rem; font-weight: bold; }
+  .na { color: #aaa; }
+</style>
+</head>
+<body>
+
+<h1>{{ away_team }} @ {{ home_team }}</h1>
+<p class="meta">Week {{ week }} &middot; {{ gameday }} &middot; {{ stadium }}</p>
+
+<h2>GAME FORECAST</h2>
+
+<div class="prob-bar">
+  <div class="prob-away" style="width:{{ away_win_prob }}">{{ away_team }} {{ away_win_prob }}</div>
+  <div class="prob-home" style="width:{{ home_win_prob }}">{{ home_team }} {{ home_win_prob }}</div>
+</div>
+
+<table>
+  <tr><th></th><th>{{ away_team }}</th><th>{{ home_team }}</th></tr>
+  <tr><td><strong>Win Probability</strong></td><td>{{ away_win_prob }}</td><td>{{ home_win_prob }}</td></tr>
+  <tr><td><strong>Projected Score</strong></td><td>{{ away_score }}</td><td>{{ home_score }}</td></tr>
+  <tr><td><strong>Score Range (80%)</strong></td><td>{{ away_score_range }}</td><td>{{ home_score_range }}</td></tr>
+  <tr><td><strong>Projected Total</strong></td><td colspan="2">{{ total_projected }} pts ({{ total_range }})</td></tr>
+  <tr><td><strong>Implied Spread</strong></td><td colspan="2">
+    {% if spread_implied > 0 %}{{ away_team }} -{{ spread_implied }}{% elif spread_implied < 0 %}{{ home_team }} +{{ spread_implied | abs }}{% else %}Pick 'em{% endif %}
+  </td></tr>
+</table>
+
+<h2>GAME ENVIRONMENT</h2>
+<table>
+  <tr><td><strong>Stadium</strong></td><td>{{ stadium }}{% if is_dome %} (dome){% else %} (outdoor, {{ surface }}){% if altitude_ft and altitude_ft > 2000 %}, {{ altitude_ft }}ft altitude{% endif %}{% endif %}</td></tr>
+  <tr><td><strong>Weather</strong></td><td>{{ weather_desc }}</td></tr>
+  <tr><td><strong>Vegas Total</strong></td><td>{{ vegas_total }}</td></tr>
+  <tr><td><strong>Vegas Spread</strong></td><td>{{ vegas_spread }}</td></tr>
+</table>
+
+<h2>TEAM PROJECTIONS</h2>
+<table>
+  <tr><th>Stat</th><th>{{ away_team }}</th><th>{{ home_team }}</th></tr>
+  <tr><td>Total Yards</td><td>{{ away_stats.total_yards }} ({{ away_stats.total_yards_range }})</td><td>{{ home_stats.total_yards }} ({{ home_stats.total_yards_range }})</td></tr>
+  <tr><td>Pass Yards</td><td>{{ away_stats.pass_yards }} ({{ away_stats.pass_yards_range }})</td><td>{{ home_stats.pass_yards }} ({{ home_stats.pass_yards_range }})</td></tr>
+  <tr><td>Rush Yards</td><td>{{ away_stats.rush_yards }} ({{ away_stats.rush_yards_range }})</td><td>{{ home_stats.rush_yards }} ({{ home_stats.rush_yards_range }})</td></tr>
+  <tr><td>Points Scored</td><td>{{ away_stats.points }} ({{ away_stats.points_range }})</td><td>{{ home_stats.points }} ({{ home_stats.points_range }})</td></tr>
+</table>
+
+<h2>PLAYER PROJECTIONS — {{ home_team }}</h2>
+
+<h3>Passing</h3>
+{% if home_qb %}
+<table>
+  <tr><th>Player</th><th>Pass Att</th><th>Comp</th><th>Pass Yds</th><th>TDs</th></tr>
+  {% for p in home_qb %}
+  <tr>
+    <td>{{ p.player_name }}</td>
+    <td>{{ p.pass_attempts }} <span class="na">({{ p.pass_attempts_range }})</span></td>
+    <td>{{ p.completions }} <span class="na">({{ p.completions_range }})</span></td>
+    <td>{{ p.pass_yards }} <span class="na">({{ p.pass_yards_range }})</span></td>
+    <td>{{ p.tds }} <span class="na">({{ p.tds_range }})</span></td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}<p class="na"><em>No QB projections available</em></p>{% endif %}
+
+<h3>Rushing</h3>
+{% if home_rb %}
+<table>
+  <tr><th>Player</th><th>Pos</th><th>Carries</th><th>Rush Yds</th><th>Targets</th><th>Rec</th><th>Rec Yds</th><th>TDs</th></tr>
+  {% for p in home_rb %}
+  <tr>
+    <td>{{ p.player_name }}</td><td>{{ p.position }}</td>
+    <td>{{ p.carries }} <span class="na">({{ p.carries_range }})</span></td>
+    <td>{{ p.rush_yards }} <span class="na">({{ p.rush_yards_range }})</span></td>
+    <td>{{ p.targets }} <span class="na">({{ p.targets_range }})</span></td>
+    <td>{{ p.receptions }} <span class="na">({{ p.receptions_range }})</span></td>
+    <td>{{ p.rec_yards }} <span class="na">({{ p.rec_yards_range }})</span></td>
+    <td>{{ p.tds }} <span class="na">({{ p.tds_range }})</span></td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}<p class="na"><em>No RB projections available</em></p>{% endif %}
+
+<h3>Receiving</h3>
+{% if home_wr_te %}
+<table>
+  <tr><th>Player</th><th>Pos</th><th>Targets</th><th>Rec</th><th>Rec Yds</th><th>TDs</th></tr>
+  {% for p in home_wr_te %}
+  <tr>
+    <td>{{ p.player_name }}</td><td>{{ p.position }}</td>
+    <td>{{ p.targets }} <span class="na">({{ p.targets_range }})</span></td>
+    <td>{{ p.receptions }} <span class="na">({{ p.receptions_range }})</span></td>
+    <td>{{ p.rec_yards }} <span class="na">({{ p.rec_yards_range }})</span></td>
+    <td>{{ p.tds }} <span class="na">({{ p.tds_range }})</span></td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}<p class="na"><em>No WR/TE projections available</em></p>{% endif %}
+
+<h2>PLAYER PROJECTIONS — {{ away_team }}</h2>
+
+<h3>Passing</h3>
+{% if away_qb %}
+<table>
+  <tr><th>Player</th><th>Pass Att</th><th>Comp</th><th>Pass Yds</th><th>TDs</th></tr>
+  {% for p in away_qb %}
+  <tr>
+    <td>{{ p.player_name }}</td>
+    <td>{{ p.pass_attempts }} <span class="na">({{ p.pass_attempts_range }})</span></td>
+    <td>{{ p.completions }} <span class="na">({{ p.completions_range }})</span></td>
+    <td>{{ p.pass_yards }} <span class="na">({{ p.pass_yards_range }})</span></td>
+    <td>{{ p.tds }} <span class="na">({{ p.tds_range }})</span></td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}<p class="na"><em>No QB projections available</em></p>{% endif %}
+
+<h3>Rushing</h3>
+{% if away_rb %}
+<table>
+  <tr><th>Player</th><th>Pos</th><th>Carries</th><th>Rush Yds</th><th>Targets</th><th>Rec</th><th>Rec Yds</th><th>TDs</th></tr>
+  {% for p in away_rb %}
+  <tr>
+    <td>{{ p.player_name }}</td><td>{{ p.position }}</td>
+    <td>{{ p.carries }} <span class="na">({{ p.carries_range }})</span></td>
+    <td>{{ p.rush_yards }} <span class="na">({{ p.rush_yards_range }})</span></td>
+    <td>{{ p.targets }} <span class="na">({{ p.targets_range }})</span></td>
+    <td>{{ p.receptions }} <span class="na">({{ p.receptions_range }})</span></td>
+    <td>{{ p.rec_yards }} <span class="na">({{ p.rec_yards_range }})</span></td>
+    <td>{{ p.tds }} <span class="na">({{ p.tds_range }})</span></td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}<p class="na"><em>No RB projections available</em></p>{% endif %}
+
+<h3>Receiving</h3>
+{% if away_wr_te %}
+<table>
+  <tr><th>Player</th><th>Pos</th><th>Targets</th><th>Rec</th><th>Rec Yds</th><th>TDs</th></tr>
+  {% for p in away_wr_te %}
+  <tr>
+    <td>{{ p.player_name }}</td><td>{{ p.position }}</td>
+    <td>{{ p.targets }} <span class="na">({{ p.targets_range }})</span></td>
+    <td>{{ p.receptions }} <span class="na">({{ p.receptions_range }})</span></td>
+    <td>{{ p.rec_yards }} <span class="na">({{ p.rec_yards_range }})</span></td>
+    <td>{{ p.tds }} <span class="na">({{ p.tds_range }})</span></td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}<p class="na"><em>No WR/TE projections available</em></p>{% endif %}
+
+<h2>CONFIDENCE SUMMARY</h2>
+<table>
+  <tr><td><strong>Model Confidence</strong></td><td><span class="confidence {{ confidence }}">{{ confidence }}</span></td></tr>
+  <tr><td><strong>Knowledge Cutoff</strong></td><td>{{ cutoff_ts }}</td></tr>
+  <tr><td><strong>Model Version</strong></td><td>{{ model_version }}</td></tr>
+  <tr><td><strong>Simulation</strong></td><td>{{ n_draws | int }} draws</td></tr>
+</table>
+
+<div class="footer">Generated by ironclad-v2 at {{ generated_at }}</div>
+</body>
+</html>

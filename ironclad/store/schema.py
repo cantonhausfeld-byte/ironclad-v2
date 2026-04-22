@@ -247,6 +247,14 @@ def _silver(conn: duckdb.DuckDBPyConnection) -> None:
         pass_rate        FLOAT,
         points_scored    INTEGER,
         points_allowed   INTEGER,
+        -- Red zone
+        rz_pass_attempts INTEGER,
+        rz_rush_attempts INTEGER,
+        rz_touchdowns    INTEGER,
+        -- Air yards
+        total_air_yards  FLOAT,
+        -- Pressure proxy
+        sack_rate        FLOAT,
         PRIMARY KEY (game_id, team)
     )
     """)
@@ -276,6 +284,8 @@ def _silver(conn: duckdb.DuckDBPyConnection) -> None:
         rec_tds           INTEGER DEFAULT 0,
         air_yards         FLOAT   DEFAULT 0,
         yards_after_catch FLOAT   DEFAULT 0,
+        rz_targets        INTEGER DEFAULT 0,
+        rz_carries        INTEGER DEFAULT 0,
         total_tds         INTEGER DEFAULT 0,
         PRIMARY KEY (game_id, player_id)
     )

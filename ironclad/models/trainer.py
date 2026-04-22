@@ -158,16 +158,20 @@ class ModelTrainer:
 
         y_cols = ["home_win", "home_margin", "total_score"]
         if for_score_env:
-            y_cols += ["home_target_points_scored", "home_target_yards_total", "home_target_pass_rate"]
-            # Flatten score-env targets
-            X["target_pass_rate"] = X.get("home_target_pass_rate")
-            X["target_points_scored"] = X.get("home_target_points_scored")
-            # Estimate plays from PBP (not directly in gold — approximate)
+            # Flatten home-side score-env targets into plain columns
+            for src, dst in [
+                ("home_target_pass_rate",     "target_pass_rate"),
+                ("home_target_points_scored", "target_points_scored"),
+                ("home_target_yards_total",   "target_yards_total"),
+            ]:
+                X[dst] = X[src] if src in X.columns else None
             X["target_plays_total"] = None
             X["target_sack_rate"] = None
 
-        y_df = X[y_cols + [c for c in ["target_pass_rate", "target_points_scored",
-                                        "target_plays_total", "target_sack_rate"] if c in X.columns]].copy()
+        extra = [c for c in ["target_pass_rate", "target_points_scored",
+                              "target_yards_total", "target_plays_total",
+                              "target_sack_rate"] if c in X.columns]
+        y_df = X[y_cols + extra].copy()
         return X, y_df
 
     def _load_player_data(
