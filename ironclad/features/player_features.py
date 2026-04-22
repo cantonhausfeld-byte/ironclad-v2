@@ -14,9 +14,7 @@ from ironclad.store.writer import GoldWriter
 
 logger = logging.getLogger(__name__)
 
-# Positions we project
 SKILL_POSITIONS = {"QB", "RB", "WR", "TE", "FB"}
-MIN_TARGETS_FOR_RECEIVER = 2  # must have at least 2 targets in recent games to include
 
 
 class PlayerFeatureBuilder:
@@ -34,7 +32,6 @@ class PlayerFeatureBuilder:
         season = int(game["season"])
         week = int(game["week"])
 
-        # Load team features for game context
         team_feats = self._conn.execute(
             "SELECT * FROM gold.team_game_features WHERE game_id = ?", [game_id]
         ).df()
@@ -49,7 +46,10 @@ class PlayerFeatureBuilder:
                 players = _fallback_roster(team, season, week, snap)
 
             opp_feats = team_feats[team_feats["team"] == opponent]
-            team_row_feats = team_feats[team_feats["team"] == team]
+            own_feats = team_feats[team_feats["team"] == team]
+
+            # Team-level PBP totals for share denominators
+            team_recent = snap.team_recent_games(team, n=ROLLING_WINDOW)
 
             for _, player in players.iterrows():
                 pos = player.get("position", "UNK")
@@ -57,14 +57,9 @@ class PlayerFeatureBuilder:
                     continue
                 try:
                     row = self._build_player_row(
-                        player=player,
-                        team=team,
-                        opponent=opponent,
-                        is_home=is_home,
-                        game=game,
-                        snap=snap,
-                        opp_feats=opp_feats,
-                        team_feats_row=team_row_feats,
+                        player=player, team=team, opponent=opponent,
+                        is_home=is_home, game=game, snap=snap,
+                        team_recent=team_recent, opp_feats=opp_feats, own_feats=own_feats,
                     )
                     rows.append(row)
                 except Exception as exc:
@@ -84,63 +79,70 @@ class PlayerFeatureBuilder:
         is_home: bool,
         game: pd.Series,
         snap: FeatureSnapshot,
+        team_recent: pd.DataFrame,
         opp_feats: pd.DataFrame,
-        team_feats_row: pd.DataFrame,
+        own_feats: pd.DataFrame,
     ) -> dict:
         pid = str(player["player_id"])
         pos = player.get("position", "UNK")
         recent = snap.player_recent_games(pid, n=ROLLING_WINDOW)
 
-        # Team pass attempts in recent games (for share calculation)
-        team_recent = snap.team_recent_games(team, n=ROLLING_WINDOW)
-        team_pass_att = team_recent["pass_attempts"].mean() if not team_recent.empty and "pass_attempts" in team_recent.columns else 30.0
-        team_rush_att = team_recent["rush_attempts"].mean() if not team_recent.empty and "rush_attempts" in team_recent.columns else 25.0
+        # Team volume denominators from rolling L4
+        team_pass_att = float(team_recent["pass_attempts"].mean()) if not team_recent.empty and "pass_attempts" in team_recent.columns else 30.0
+        team_rush_att = float(team_recent["rush_attempts"].mean()) if not team_recent.empty and "rush_attempts" in team_recent.columns else 25.0
+        team_air_yards = float(team_recent["total_air_yards"].mean()) if not team_recent.empty and "total_air_yards" in team_recent.columns else 200.0
+        team_rz_pass = float(team_recent["rz_pass_attempts"].mean()) if not team_recent.empty and "rz_pass_attempts" in team_recent.columns else 5.0
+        team_rz_rush = float(team_recent["rz_rush_attempts"].mean()) if not team_recent.empty and "rz_rush_attempts" in team_recent.columns else 5.0
+
         team_pass_att = max(team_pass_att or 30.0, 1.0)
         team_rush_att = max(team_rush_att or 25.0, 1.0)
+        team_air_yards = max(team_air_yards or 200.0, 1.0)
+        team_rz_pass = max(team_rz_pass or 5.0, 1.0)
+        team_rz_rush = max(team_rz_rush or 5.0, 1.0)
 
-        def avg(col, default=None):
+        def avg(col, default=0.0):
             if recent.empty or col not in recent.columns:
                 return default
             vals = recent[col].dropna()
-            return float(vals.mean()) if len(vals) > 0 else default
+            return float(vals.mean()) if len(vals) else default
 
-        # Usage
         targets_avg = avg("targets", 0.0)
         carries_avg = avg("carries", 0.0)
         rec_avg = avg("receptions", 0.0)
+        air_yards_avg = avg("air_yards", 0.0)
+        rz_targets_avg = avg("rz_targets", 0.0)
+        rz_carries_avg = avg("rz_carries", 0.0)
 
-        target_share = targets_avg / team_pass_att
-        carry_share = carries_avg / team_rush_att
-        catch_rate = safe_divide(pd.Series([rec_avg]), pd.Series([targets_avg]), 0.0).iloc[0] if targets_avg > 0 else None
-        yds_per_tgt = safe_divide(
-            pd.Series([avg("rec_yards", 0.0)]), pd.Series([targets_avg]), 0.0
-        ).iloc[0] if targets_avg > 0 else None
-        yds_per_carry = safe_divide(
-            pd.Series([avg("rush_yards", 0.0)]), pd.Series([carries_avg]), 0.0
-        ).iloc[0] if carries_avg > 0 else None
-        yac = safe_divide(
-            pd.Series([avg("yards_after_catch", 0.0)]), pd.Series([rec_avg]), 0.0
-        ).iloc[0] if rec_avg and rec_avg > 0 else None
-        td_per_tgt = safe_divide(
-            pd.Series([avg("total_tds", 0.0)]), pd.Series([targets_avg]), 0.0
-        ).iloc[0] if targets_avg > 0 else None
-        td_per_carry = safe_divide(
-            pd.Series([avg("total_tds", 0.0)]), pd.Series([carries_avg]), 0.0
-        ).iloc[0] if carries_avg > 0 else None
+        eps = 1e-6
+        catch_rate = rec_avg / (targets_avg + eps) if targets_avg > 0 else None
+        yds_per_tgt = avg("rec_yards", 0.0) / (targets_avg + eps) if targets_avg > 0 else None
+        yds_per_carry = avg("rush_yards", 0.0) / (carries_avg + eps) if carries_avg > 0 else None
+        yac_per_rec = avg("yards_after_catch", 0.0) / (rec_avg + eps) if rec_avg > 0 else None
+        total_tds_avg = avg("total_tds", 0.0)
+        td_per_tgt = total_tds_avg / (targets_avg + eps) if targets_avg > 0 else None
+        td_per_carry = total_tds_avg / (carries_avg + eps) if carries_avg > 0 else None
 
-        # Opponent defense context
+        # Clamp rates to valid range
+        if catch_rate is not None:
+            catch_rate = max(0.0, min(1.0, catch_rate))
+        if td_per_tgt is not None:
+            td_per_tgt = max(0.0, min(0.5, td_per_tgt))
+        if td_per_carry is not None:
+            td_per_carry = max(0.0, min(0.5, td_per_carry))
+
         def opp_feat(col, default=None):
             if opp_feats.empty or col not in opp_feats.columns:
                 return default
             return opp_feats.iloc[0].get(col, default)
 
-        def team_feat(col, default=None):
-            if team_feats_row.empty or col not in team_feats_row.columns:
+        def own_feat(col, default=None):
+            if own_feats.empty or col not in own_feats.columns:
                 return default
-            return team_feats_row.iloc[0].get(col, default)
+            return own_feats.iloc[0].get(col, default)
 
         availability = float(player.get("availability", AVAILABILITY_DEFAULT))
         depth_team = player.get("depth_team")
+        n_games = len(recent)
 
         feature_row = {
             "game_id": game["game_id"],
@@ -156,55 +158,37 @@ class PlayerFeatureBuilder:
             "feature_version": FEATURE_VERSION,
             "availability": availability,
             "depth_team": int(depth_team) if pd.notna(depth_team) else None,
-            "snap_rate_l4": None,  # snap data not in nfl_data_py PBP directly
-            "target_share_l4": target_share,
-            "carry_share_l4": carry_share,
-            "air_yards_share_l4": safe_divide(
-                pd.Series([avg("air_yards", 0.0)]),
-                pd.Series([team_pass_att * 7.5]),  # approx air yards per pass
-                0.0,
-            ).iloc[0],
-            "route_rate_l4": None,
-            "redzone_target_share_l4": None,  # requires RZ filter from PBP
-            "redzone_carry_share_l4": None,
-            "catch_rate_l4": catch_rate,
-            "yards_per_target_l4": yds_per_tgt,
-            "yards_per_carry_l4": yds_per_carry,
-            "yac_per_rec_l4": yac,
-            "td_rate_per_target_l4": td_per_tgt,
-            "td_rate_per_carry_l4": td_per_carry,
-            "opp_def_pass_epa_l4": opp_feat("def_epa_per_play_l4"),
-            "opp_def_rush_epa_l4": opp_feat("def_epa_per_play_l4"),
-            "opp_def_sack_rate_l4": opp_feat("def_sack_rate_l4"),
-            "team_off_pass_rate_l4": team_feat("off_pass_rate_l4"),
-            "team_off_epa_l4": team_feat("off_epa_per_play_l4"),
-            "team_implied_total": team_feat("implied_total_from_odds"),
-            # Targets (post-game)
-            "target_targets": None,
-            "target_carries": None,
-            "target_receptions": None,
-            "target_rec_yards": None,
-            "target_rush_yards": None,
-            "target_total_tds": None,
+            "snap_rate_l4": None,
+            "target_share_l4":          targets_avg / team_pass_att,
+            "carry_share_l4":           carries_avg / team_rush_att,
+            "air_yards_share_l4":       air_yards_avg / team_air_yards,
+            "route_rate_l4":            None,
+            "redzone_target_share_l4":  rz_targets_avg / team_rz_pass,
+            "redzone_carry_share_l4":   rz_carries_avg / team_rz_rush,
+            "catch_rate_l4":            catch_rate,
+            "yards_per_target_l4":      yds_per_tgt,
+            "yards_per_carry_l4":       yds_per_carry,
+            "yac_per_rec_l4":           yac_per_rec,
+            "td_rate_per_target_l4":    td_per_tgt,
+            "td_rate_per_carry_l4":     td_per_carry,
+            "opp_def_pass_epa_l4":      opp_feat("def_epa_per_play_l4"),
+            "opp_def_rush_epa_l4":      opp_feat("def_rush_epa_l4"),
+            "opp_def_sack_rate_l4":     opp_feat("def_sack_rate_l4"),
+            "team_off_pass_rate_l4":    own_feat("off_pass_rate_l4"),
+            "team_off_epa_l4":          own_feat("off_epa_per_play_l4"),
+            "team_implied_total":       own_feat("implied_total_from_odds"),
+            # Targets filled post-game
+            "target_targets": None, "target_carries": None,
+            "target_receptions": None, "target_rec_yards": None,
+            "target_rush_yards": None, "target_total_tds": None,
+            "data_completeness_score": min(1.0, n_games / ROLLING_WINDOW),
         }
-
-        feat_vals = pd.Series({
-            k: v for k, v in feature_row.items()
-            if k not in ("game_id", "season", "week", "player_id", "player_name",
-                         "team", "opponent", "position", "is_home", "cutoff_ts",
-                         "feature_version", "data_completeness_score",
-                         "target_targets", "target_carries", "target_receptions",
-                         "target_rec_yards", "target_rush_yards", "target_total_tds")
-        })
-        feature_row["data_completeness_score"] = completeness_score(feat_vals)
         return feature_row
 
 
 def _fallback_roster(team: str, season: int, week: int, snap: FeatureSnapshot) -> pd.DataFrame:
-    """Fall back to latest available roster week for this team."""
     df = snap.reader.read_as_of("silver.player_weekly_status")
     df = df[(df["team"] == team) & (df["season"] == season) & (df["week"] <= week)]
     if df.empty:
         return pd.DataFrame()
-    latest_week = df["week"].max()
-    return df[df["week"] == latest_week]
+    return df[df["week"] == df["week"].max()]

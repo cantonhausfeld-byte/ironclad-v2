@@ -33,13 +33,7 @@ class TeamFeatureBuilder:
             (game["home_team"], game["away_team"], True),
             (game["away_team"], game["home_team"], False),
         ]:
-            row = self._build_team_row(
-                team=team,
-                opponent=opp,
-                is_home=is_home,
-                game=game,
-                snap=snap,
-            )
+            row = self._build_team_row(team, opp, is_home, game, snap)
             rows.append(row)
 
         df = pd.DataFrame(rows)
@@ -47,7 +41,6 @@ class TeamFeatureBuilder:
         return df
 
     def build_for_season(self, season: int, cutoff_ts: datetime | None = None) -> int:
-        """Build features for all games in a season."""
         games = self._conn.execute(
             "SELECT game_id, gameday, gametime_local FROM silver.games WHERE season = ?",
             [season],
@@ -59,7 +52,7 @@ class TeamFeatureBuilder:
                 self.build_for_game(g["game_id"], game_cutoff)
                 total += 1
             except Exception as exc:
-                logger.warning("Failed features for %s: %s", g["game_id"], exc)
+                logger.warning("Features failed for %s: %s", g["game_id"], exc)
         return total
 
     def _build_team_row(
@@ -76,35 +69,54 @@ class TeamFeatureBuilder:
         recent = snap.team_recent_games(team, n=ROLLING_WINDOW)
         season_games = snap.team_season_games(team, season)
 
-        # Offense rolling L4
-        def off_l4(col, default_key):
+        # ── Offense rolling L4 ────────────────────────────────────────────────
+        def off(col, default_key=None, default=None):
+            d = default if default is not None else LEAGUE_PRIORS.get(default_key or col, 0.0)
             if recent.empty or col not in recent.columns:
-                return LEAGUE_PRIORS.get(default_key)
-            return recent[col].mean()
+                return d
+            vals = recent[col].dropna()
+            return float(vals.mean()) if len(vals) else d
 
-        # Defense rolling L4 (opponent column = what this team allowed)
-        def def_l4(col, default_key):
-            if recent.empty or col not in recent.columns:
-                return LEAGUE_PRIORS.get(default_key)
-            # Flip: defense is opponent's offense against us
-            opp_games = self._opponent_games_against(team, recent, snap)
-            if opp_games.empty or col not in opp_games.columns:
-                return LEAGUE_PRIORS.get(default_key)
-            return opp_games[col].mean()
+        # ── Defense: opponent stats FROM recent opponents against this team ───
+        def def_from_opp(col, default_key=None, default=None):
+            d = default if default is not None else LEAGUE_PRIORS.get(default_key or col, 0.0)
+            if recent.empty:
+                return d
+            all_stats = snap.reader.read_as_of("silver.team_game_stats")
+            opp_rows = all_stats[
+                all_stats["game_id"].isin(recent["game_id"]) &
+                (all_stats["opponent"] == team)
+            ]
+            if opp_rows.empty or col not in opp_rows.columns:
+                return d
+            vals = opp_rows[col].dropna()
+            return float(vals.mean()) if len(vals) else d
 
         # Season-to-date
-        def std(col, default_key):
+        def std(col, default_key=None, default=None):
+            d = default if default is not None else LEAGUE_PRIORS.get(default_key or col, 0.0)
             if season_games.empty or col not in season_games.columns:
-                return LEAGUE_PRIORS.get(default_key)
-            return season_games[col].mean()
+                return d
+            vals = season_games[col].dropna()
+            return float(vals.mean()) if len(vals) else d
 
-        # Rest days
         rest_days = _compute_rest_days(team, game, snap)
 
         # Odds context
         implied_total = game.get("total_consensus")
         spread = game.get("spread_consensus")
         home_win_prob = game.get("home_ml_implied")
+
+        # Data completeness: how many L4 games do we have?
+        n_games = len(recent)
+        completeness = min(1.0, n_games / ROLLING_WINDOW)
+
+        # Sack rate: sacks_allowed / pass_attempts (offense perspective)
+        off_sack_rate = safe_divide(
+            pd.Series([off("sacks_allowed", default=0.0)]),
+            pd.Series([off("pass_attempts", default=30.0)]),
+            LEAGUE_PRIORS["sack_rate"],
+        ).iloc[0]
 
         feature_row = {
             "game_id": game["game_id"],
@@ -116,84 +128,49 @@ class TeamFeatureBuilder:
             "cutoff_ts": snap.cutoff_ts,
             "feature_version": FEATURE_VERSION,
             # Offense L4
-            "off_epa_per_play_l4": off_l4("epa_per_play", "off_epa_per_play"),
-            "off_pass_epa_l4": off_l4("epa_pass", "off_epa_per_play"),
-            "off_rush_epa_l4": off_l4("epa_rush", "off_epa_per_play"),
-            "off_pass_rate_l4": off_l4("pass_rate", "pass_rate"),
-            "off_yards_per_play_l4": safe_divide(
-                pd.Series([recent["total_yards"].mean() if not recent.empty and "total_yards" in recent.columns else None]),
-                pd.Series([recent["plays_total"].mean() if not recent.empty and "plays_total" in recent.columns else None]),
-                default=LEAGUE_PRIORS["yards_per_play"],
+            "off_epa_per_play_l4":    off("epa_per_play",    "off_epa_per_play"),
+            "off_pass_epa_l4":        off("epa_pass",        "off_epa_per_play"),
+            "off_rush_epa_l4":        off("epa_rush",        "off_epa_per_play"),
+            "off_pass_rate_l4":       off("pass_rate",       "pass_rate"),
+            "off_yards_per_play_l4":  safe_divide(
+                pd.Series([off("total_yards", default=None)]),
+                pd.Series([off("plays_total", default=None)]),
+                LEAGUE_PRIORS["yards_per_play"],
             ).iloc[0],
-            "off_success_rate_l4": off_l4("success_rate", "success_rate"),
-            "off_points_per_game_l4": off_l4("points_scored", "points_per_game"),
-            # Defense L4 (approximated as allowed columns from recent games)
-            "def_epa_per_play_l4": _def_epa(team, recent, snap, self._conn),
-            "def_pass_epa_l4": None,  # populated in advanced phase
-            "def_rush_epa_l4": None,
-            "def_yards_allowed_l4": recent["points_allowed"].mean() * 6.5 if not recent.empty and "points_allowed" in recent.columns else None,
-            "def_success_rate_l4": None,
-            "def_points_allowed_l4": off_l4("points_allowed", "points_per_game"),
-            "def_sack_rate_l4": safe_divide(
-                pd.Series([recent["sacks_allowed"].mean() if not recent.empty and "sacks_allowed" in recent.columns else None]),
-                pd.Series([recent["pass_attempts"].mean() if not recent.empty and "pass_attempts" in recent.columns else None]),
-                default=LEAGUE_PRIORS["sack_rate"],
-            ).iloc[0],
-            # STD
-            "off_epa_per_play_std": std("epa_per_play", "off_epa_per_play"),
-            "def_epa_per_play_std": None,
+            "off_success_rate_l4":    off("success_rate",    "success_rate"),
+            "off_points_per_game_l4": off("points_scored",   "points_per_game"),
+            # Defense L4 (from opponent's stats against this team)
+            "def_epa_per_play_l4":    def_from_opp("epa_per_play",  "def_epa_per_play"),
+            "def_pass_epa_l4":        def_from_opp("epa_pass",      "def_epa_per_play"),
+            "def_rush_epa_l4":        def_from_opp("epa_rush",      "def_epa_per_play"),
+            "def_yards_allowed_l4":   def_from_opp("total_yards",   default=330.0),
+            "def_success_rate_l4":    def_from_opp("success_rate",  "success_rate"),
+            "def_points_allowed_l4":  off("points_allowed",         "points_per_game"),
+            "def_sack_rate_l4":       off_sack_rate,
+            # Season-to-date
+            "off_epa_per_play_std":   std("epa_per_play",   "off_epa_per_play"),
+            "def_epa_per_play_std":   def_from_opp("epa_per_play",  "def_epa_per_play"),
             # Context
-            "rest_days": rest_days,
-            "is_divisional": bool(game.get("overtime")) if False else None,  # filled from schedule
-            "implied_total_from_odds": implied_total,
-            "spread_from_odds": spread if is_home else (-spread if spread is not None else None),
-            "home_win_prob_from_odds": home_win_prob if is_home else (1 - home_win_prob if home_win_prob else None),
-            "altitude_ft": game.get("altitude_ft"),
-            "is_dome": game.get("is_dome"),
-            "temp_f": game.get("temp_f"),
-            "wind_mph": game.get("wind_mph"),
-            "precip_in": game.get("precip_in"),
-            "surface_grass": _surface_grass(game.get("surface")),
-            # Targets (filled post-game)
-            "target_points_scored": None,
-            "target_yards_total": None,
-            "target_pass_rate": None,
+            "rest_days":              rest_days,
+            "is_divisional":          None,
+            "implied_total_from_odds": float(implied_total) if pd.notna(implied_total) else None,
+            "spread_from_odds":       float(spread) if (is_home and pd.notna(spread)) else
+                                      (-float(spread) if pd.notna(spread) else None),
+            "home_win_prob_from_odds": float(home_win_prob) if (is_home and pd.notna(home_win_prob)) else
+                                       (1 - float(home_win_prob) if pd.notna(home_win_prob) else None),
+            "altitude_ft":            game.get("altitude_ft"),
+            "is_dome":                game.get("is_dome"),
+            "temp_f":                 game.get("temp_f"),
+            "wind_mph":               game.get("wind_mph"),
+            "precip_in":              game.get("precip_in"),
+            "surface_grass":          _surface_grass(game.get("surface")),
+            # Targets (filled post-game by TargetBackfiller)
+            "target_points_scored":   None,
+            "target_yards_total":     None,
+            "target_pass_rate":       None,
+            "data_completeness_score": completeness,
         }
-
-        # Compute completeness
-        feat_values = pd.Series({
-            k: v for k, v in feature_row.items()
-            if k not in ("game_id", "season", "week", "team", "opponent",
-                         "is_home", "cutoff_ts", "feature_version",
-                         "data_completeness_score",
-                         "target_points_scored", "target_yards_total", "target_pass_rate")
-        })
-        feature_row["data_completeness_score"] = completeness_score(feat_values)
         return feature_row
-
-    def _opponent_games_against(self, team: str, recent: pd.DataFrame, snap: FeatureSnapshot) -> pd.DataFrame:
-        """Get opponent-side stats for team's recent opponents (approximates defense)."""
-        if recent.empty:
-            return pd.DataFrame()
-        opp_ids = recent["game_id"].tolist()
-        opp_teams = recent["opponent"].tolist() if "opponent" in recent.columns else []
-        if not opp_teams:
-            return pd.DataFrame()
-        all_stats = snap.reader.read_as_of("silver.team_game_stats")
-        mask = all_stats["game_id"].isin(opp_ids) & all_stats["team"].isin(opp_teams)
-        return all_stats[mask]
-
-
-def _def_epa(team: str, recent: pd.DataFrame, snap: FeatureSnapshot, conn) -> float | None:
-    """Approximate defensive EPA by looking at what opponents gained against this team."""
-    if recent.empty:
-        return LEAGUE_PRIORS["def_epa_per_play"]
-    all_stats = snap.reader.read_as_of("silver.team_game_stats")
-    game_ids = recent["game_id"].tolist()
-    opp_rows = all_stats[all_stats["game_id"].isin(game_ids) & (all_stats["opponent"] == team)]
-    if opp_rows.empty:
-        return LEAGUE_PRIORS["def_epa_per_play"]
-    return opp_rows["epa_per_play"].mean()
 
 
 def _compute_rest_days(team: str, game: pd.Series, snap: FeatureSnapshot) -> int | None:
@@ -204,8 +181,7 @@ def _compute_rest_days(team: str, game: pd.Series, snap: FeatureSnapshot) -> int
     prior = team_games[team_games["gameday"] < current_day].sort_values("gameday")
     if prior.empty:
         return None
-    last_day = prior.iloc[-1]["gameday"]
-    return (current_day - last_day).days
+    return int((current_day - prior.iloc[-1]["gameday"]).days)
 
 
 def _surface_grass(surface) -> bool | None:
@@ -215,14 +191,12 @@ def _surface_grass(surface) -> bool | None:
 
 
 def _parse_kickoff(gameday, gametime_local) -> datetime:
-    """Convert gameday + local time string to UTC datetime (approx)."""
     day = pd.to_datetime(gameday)
     if gametime_local and isinstance(gametime_local, str):
         try:
             h, m = gametime_local.split(":")
-            dt = day + timedelta(hours=int(h), minutes=int(m)) + timedelta(hours=5)  # EST→UTC approx
+            dt = day + timedelta(hours=int(h), minutes=int(m)) + timedelta(hours=5)
             return dt.replace(tzinfo=timezone.utc)
         except Exception:
             pass
-    # Default: noon EST = 17:00 UTC
     return (day + timedelta(hours=17)).replace(tzinfo=timezone.utc)

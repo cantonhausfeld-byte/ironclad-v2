@@ -15,6 +15,7 @@ from ironclad.models.team.game_outcome import GameOutcomeModel
 from ironclad.models.team.score_env import ScoreEnvironmentModel
 from ironclad.models.player.usage import PlayerUsageModel
 from ironclad.models.player.efficiency import PlayerEfficiencyModel
+from ironclad.models.registry import ModelRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -23,13 +24,15 @@ class MonteCarloEngine:
     def __init__(self, n_draws: int = DEFAULT_N_DRAWS, seed: int = 42) -> None:
         self.n_draws = n_draws
         self.seed = seed
-        self._outcome_model = GameOutcomeModel()
-        self._env_model = ScoreEnvironmentModel()
-        self._usage_model = PlayerUsageModel()
-        self._eff_model = PlayerEfficiencyModel()
         self._game_draw = GameDraw()
         self._player_draw = PlayerDraw()
         self._reconciler = Reconciler()
+        # Load trained models if available, fall back to stubs
+        registry = ModelRegistry()
+        self._outcome_model = _try_load(registry, "game_outcome", GameOutcomeModel)
+        self._env_model = _try_load(registry, "score_env", ScoreEnvironmentModel)
+        self._usage_model = _try_load(registry, "player_usage", PlayerUsageModel)
+        self._eff_model = _try_load(registry, "player_efficiency", PlayerEfficiencyModel)
 
     def run(
         self,
@@ -124,6 +127,14 @@ class MonteCarloEngine:
             )
             contexts.append(ctx)
         return contexts
+
+
+def _try_load(registry: ModelRegistry, name: str, fallback_cls):
+    try:
+        return registry.load(name)
+    except FileNotFoundError:
+        logger.debug("No trained %s found; using stub", name)
+        return fallback_cls()
 
 
 def _player_to_dict(p: PlayerDrawResult) -> dict:

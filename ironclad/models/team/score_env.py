@@ -1,26 +1,82 @@
 """Score environment model: pace, pass rate, scoring context."""
 from __future__ import annotations
 
+import logging
+
+import numpy as np
 import pandas as pd
+from xgboost import XGBRegressor
 
 from ironclad.config import LEAGUE_PRIORS
 from ironclad.models.base import BaseModel
 
+logger = logging.getLogger(__name__)
+
+FEATURES = [
+    "off_epa_per_play_l4", "off_pass_epa_l4", "off_rush_epa_l4",
+    "off_pass_rate_l4", "off_success_rate_l4", "off_points_per_game_l4",
+    "def_epa_per_play_l4", "def_sack_rate_l4",
+    "opp_def_pass_epa_l4", "opp_def_rush_epa_l4",
+    "implied_total_from_odds", "spread_from_odds",
+    "rest_days", "is_dome", "temp_f", "wind_mph",
+]
+
 
 class ScoreEnvironmentModel(BaseModel):
-    """Stub: returns rolling averages for team game shape."""
+    """XGBoost multi-target score environment model."""
     name = "score_env"
-    version = "stub_v1"
+    version = "v1.0"
+
+    def __init__(self) -> None:
+        self._reg_pass_rate: XGBRegressor | None = None
+        self._reg_plays: XGBRegressor | None = None
+        self._reg_team_total: XGBRegressor | None = None
+        self._reg_sack_rate: XGBRegressor | None = None
+        self._fitted = False
+
+    def fit(self, X: pd.DataFrame, y: pd.DataFrame) -> None:
+        feat_cols = [c for c in FEATURES if c in X.columns]
+        Xm = X[feat_cols].fillna(0)
+
+        targets = {
+            "_reg_pass_rate":  "target_pass_rate",
+            "_reg_plays":      "target_plays_total",
+            "_reg_team_total": "target_points_scored",
+            "_reg_sack_rate":  "target_sack_rate",
+        }
+        for attr, tgt in targets.items():
+            if tgt not in y.columns:
+                logger.warning("Missing target %s, skipping", tgt)
+                continue
+            mask = y[tgt].notna()
+            reg = XGBRegressor(
+                n_estimators=200, learning_rate=0.05, max_depth=4,
+                subsample=0.8, colsample_bytree=0.8, random_state=42, n_jobs=-1,
+            )
+            reg.fit(Xm[mask], y[tgt][mask])
+            setattr(self, attr, reg)
+
+        self._fitted = True
+        logger.info("ScoreEnvironmentModel fitted on %d rows", len(Xm))
 
     def predict(self, X: pd.DataFrame) -> dict:
-        pass_rate = _col(X, "off_pass_rate_l4", LEAGUE_PRIORS["pass_rate"])
-        total_plays = _col(X, None, LEAGUE_PRIORS["total_plays"])
-        sack_rate = _col(X, "def_sack_rate_l4", LEAGUE_PRIORS["sack_rate"])
-        team_total = _col(X, "implied_total_from_odds", LEAGUE_PRIORS["points_per_game"])
-        if team_total is None:
-            team_total = LEAGUE_PRIORS["points_per_game"]
-        # Team implied total is half of game total (rough split)
-        team_total = float(team_total) / 2.0
+        if self._fitted and self._reg_pass_rate is not None:
+            return self._predict_trained(X)
+        return self._predict_stub(X)
+
+    def _predict_trained(self, X: pd.DataFrame) -> dict:
+        feat_cols = [c for c in FEATURES if c in X.columns]
+        Xm = X[feat_cols].fillna(0)
+
+        def pred(reg, default):
+            if reg is None:
+                return default
+            return max(0.0, float(reg.predict(Xm)[0]))
+
+        pass_rate = np.clip(pred(self._reg_pass_rate, LEAGUE_PRIORS["pass_rate"]), 0.3, 0.85)
+        total_plays = np.clip(pred(self._reg_plays, LEAGUE_PRIORS["total_plays"]), 40, 90)
+        sack_rate = np.clip(pred(self._reg_sack_rate, LEAGUE_PRIORS["sack_rate"]), 0.01, 0.20)
+        team_total = max(7.0, pred(self._reg_team_total, LEAGUE_PRIORS["points_per_game"]))
 
         return {
             "pass_rate_projected": float(pass_rate),
@@ -29,9 +85,17 @@ class ScoreEnvironmentModel(BaseModel):
             "team_total_projected": float(team_total),
         }
 
+    def _predict_stub(self, X: pd.DataFrame) -> dict:
+        def col(c, default):
+            if X is None or c not in X.columns:
+                return default
+            val = X[c].iloc[0] if not X.empty else None
+            return float(val) if pd.notna(val) else default
 
-def _col(X: pd.DataFrame | None, col: str | None, default: float) -> float:
-    if X is None or col is None or col not in X.columns:
-        return default
-    val = X[col].iloc[0] if not X.empty else None
-    return float(val) if pd.notna(val) else default
+        team_total = col("implied_total_from_odds", LEAGUE_PRIORS["points_per_game"] * 2) / 2.0
+        return {
+            "pass_rate_projected": col("off_pass_rate_l4", LEAGUE_PRIORS["pass_rate"]),
+            "total_plays_projected": LEAGUE_PRIORS["total_plays"],
+            "sack_rate_projected": col("def_sack_rate_l4", LEAGUE_PRIORS["sack_rate"]),
+            "team_total_projected": max(7.0, team_total),
+        }

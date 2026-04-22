@@ -118,6 +118,87 @@ def _lookup_game_id(home: str, away: str, week: int, season: int) -> str | None:
 
 # ── status ────────────────────────────────────────────────────────────────────
 
+# ── train ─────────────────────────────────────────────────────────────────────
+
+@cli.command()
+@click.option("--train-seasons", default="2016-2022",
+              help="Season range for training, e.g. '2016-2022' or '2018,2019,2020'")
+@click.option("--val-seasons", default="2023",
+              help="Season range for validation/calibration")
+@click.option("--model", default="all",
+              type=click.Choice(["all", "game-outcome", "score-env", "player-usage", "player-efficiency"]),
+              help="Which model(s) to train")
+def train(train_seasons, val_seasons, model) -> None:
+    """Train ML models on backfilled historical data."""
+    train_list = _parse_seasons(train_seasons)
+    val_list = _parse_seasons(val_seasons)
+    if not train_list:
+        click.echo("ERROR: Could not parse --train-seasons", err=True)
+        sys.exit(1)
+
+    click.echo(f"Training seasons: {train_list}  |  Validation: {val_list}")
+    from ironclad.models.trainer import ModelTrainer
+    trainer = ModelTrainer()
+
+    if model == "all":
+        metrics = trainer.train_all(train_list, val_list or None)
+    elif model == "game-outcome":
+        metrics = {"game_outcome": trainer.train_game_outcome(train_list, val_list or None)}
+    elif model == "score-env":
+        metrics = {"score_env": trainer.train_score_env(train_list)}
+    elif model == "player-usage":
+        metrics = {"player_usage": trainer.train_player_usage(train_list)}
+    elif model == "player-efficiency":
+        metrics = {"player_efficiency": trainer.train_player_efficiency(train_list)}
+
+    click.echo("\nTraining complete. Metrics:")
+    for name, m in metrics.items():
+        click.echo(f"  {name}: {m}")
+
+
+# ── evaluate ──────────────────────────────────────────────────────────────────
+
+@cli.command()
+@click.option("--val-seasons", default="2023",
+              help="Seasons to evaluate against (comma-separated or range)")
+def evaluate(val_seasons) -> None:
+    """Evaluate trained models against held-out seasons."""
+    val_list = _parse_seasons(val_seasons)
+    if not val_list:
+        click.echo("ERROR: Could not parse --val-seasons", err=True)
+        sys.exit(1)
+
+    click.echo(f"Evaluating on seasons: {val_list}")
+    from ironclad.models.trainer import ModelTrainer
+    trainer = ModelTrainer()
+    metrics = trainer.evaluate(val_list)
+
+    if metrics:
+        click.echo("\nEvaluation metrics:")
+        for k, v in metrics.items():
+            click.echo(f"  {k}: {v}")
+    else:
+        click.echo("No metrics available (run ironclad train first)")
+
+
+def _parse_seasons(spec: str) -> list[int]:
+    """Parse '2016-2022' or '2018,2019,2020' into a list of ints."""
+    spec = spec.strip()
+    if "-" in spec and "," not in spec:
+        parts = spec.split("-")
+        if len(parts) == 2:
+            try:
+                return list(range(int(parts[0]), int(parts[1]) + 1))
+            except ValueError:
+                pass
+    try:
+        return [int(s.strip()) for s in spec.split(",")]
+    except ValueError:
+        return []
+
+
+# ── status ─────────────────────────────────────────────────────────────────────
+
 @cli.command()
 def status() -> None:
     """Show data and model health summary."""
