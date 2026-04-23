@@ -68,6 +68,12 @@ class FeatureSnapshot:
             return None
         return df.sort_values("week").iloc[-1]
 
+    def player_recent_status(self, player_id: str, season: int, week: int, n: int = 4) -> pd.DataFrame:
+        """Last n weekly status rows for a player prior to the target week (includes snap_rate)."""
+        df = self.reader.read_as_of("silver.player_weekly_status")
+        df = df[(df["player_id"] == player_id) & (df["season"] == season) & (df["week"] < week)]
+        return df.sort_values("week").tail(n)
+
     # ── Game context ──────────────────────────────────────────────────────────
 
     def game_row(self, game_id: str) -> pd.Series | None:

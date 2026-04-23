@@ -1,11 +1,23 @@
-"""Base ingestor with retry logic."""
+"""Base ingestor with retry logic and column-safety helpers."""
 from __future__ import annotations
 
 import time
 import logging
 from abc import ABC, abstractmethod
 
+import pandas as pd
+
 logger = logging.getLogger(__name__)
+
+
+def _safe_select(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
+    """Return a DataFrame with exactly `cols`, filling missing ones with None."""
+    present = [c for c in cols if c in df.columns]
+    result = df[present].copy()
+    for c in cols:
+        if c not in result.columns:
+            result[c] = None
+    return result[cols]
 
 
 class BaseIngestor(ABC):

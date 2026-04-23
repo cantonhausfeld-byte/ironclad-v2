@@ -16,6 +16,7 @@ def test_all_expected_tables_exist():
         "bronze.schedules", "bronze.play_by_play", "bronze.rosters",
         "bronze.injuries", "bronze.depth_charts", "bronze.odds",
         "bronze.weather", "bronze.stadiums",
+        "bronze.snap_counts", "bronze.player_stats_weekly",
         "silver.games", "silver.team_game_stats", "silver.player_game_stats",
         "silver.player_weekly_status",
         "gold.team_game_features", "gold.player_game_features",

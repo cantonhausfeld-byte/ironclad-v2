@@ -212,6 +212,7 @@ def status() -> None:
 
         for table in [
             "bronze.schedules", "bronze.play_by_play", "bronze.rosters",
+            "bronze.snap_counts", "bronze.player_stats_weekly",
             "silver.games", "silver.team_game_stats", "silver.player_game_stats",
             "gold.team_game_features", "gold.player_game_features",
         ]:

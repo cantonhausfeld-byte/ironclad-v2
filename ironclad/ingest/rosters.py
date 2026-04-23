@@ -6,14 +6,14 @@ import logging
 import nfl_data_py as nfl
 import pandas as pd
 
-from ironclad.ingest.base import BaseIngestor
+from ironclad.ingest.base import BaseIngestor, _safe_select
 from ironclad.store.writer import BronzeWriter
 
 logger = logging.getLogger(__name__)
 
 _KEEP = [
     "season", "week", "player_id", "player_name", "team", "position",
-    "depth_chart_position", "jersey_number", "status",
+    "depth_chart_pos", "jersey_number", "status",
     "height", "weight", "years_exp",
 ]
 
@@ -32,9 +32,10 @@ class RosterIngestor(BaseIngestor):
 
 
 def _clean(raw: pd.DataFrame) -> pd.DataFrame:
-    cols = [c for c in _KEEP if c in raw.columns]
-    df = raw[cols].copy()
-    df = df.rename(columns={"depth_chart_position": "depth_chart_pos"})
+    # Normalise depth_chart_position → depth_chart_pos regardless of source name
+    if "depth_chart_position" in raw.columns and "depth_chart_pos" not in raw.columns:
+        raw = raw.rename(columns={"depth_chart_position": "depth_chart_pos"})
+    df = _safe_select(raw, _KEEP)
     df = df.dropna(subset=["player_id", "team", "position"])
     df["player_id"] = df["player_id"].astype(str)
     df["season"] = df["season"].astype(int)

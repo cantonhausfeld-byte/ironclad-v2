@@ -86,6 +86,7 @@ class PlayerFeatureBuilder:
         pid = str(player["player_id"])
         pos = player.get("position", "UNK")
         recent = snap.player_recent_games(pid, n=ROLLING_WINDOW)
+        recent_status = snap.player_recent_status(pid, season, week, n=ROLLING_WINDOW)
 
         # Team volume denominators from rolling L4
         team_pass_att = float(team_recent["pass_attempts"].mean()) if not team_recent.empty and "pass_attempts" in team_recent.columns else 30.0
@@ -158,7 +159,7 @@ class PlayerFeatureBuilder:
             "feature_version": FEATURE_VERSION,
             "availability": availability,
             "depth_team": int(depth_team) if pd.notna(depth_team) else None,
-            "snap_rate_l4": None,
+            "snap_rate_l4": _avg_col(recent_status, "snap_rate"),
             "target_share_l4":          targets_avg / team_pass_att,
             "carry_share_l4":           carries_avg / team_rush_att,
             "air_yards_share_l4":       air_yards_avg / team_air_yards,
@@ -184,6 +185,14 @@ class PlayerFeatureBuilder:
             "data_completeness_score": min(1.0, n_games / ROLLING_WINDOW),
         }
         return feature_row
+
+
+def _avg_col(df: pd.DataFrame, col: str, default=None):
+    """Mean of a column across a DataFrame; returns default if absent or all-null."""
+    if df.empty or col not in df.columns:
+        return default
+    vals = df[col].dropna()
+    return float(vals.mean()) if len(vals) else default
 
 
 def _fallback_roster(team: str, season: int, week: int, snap: FeatureSnapshot) -> pd.DataFrame:

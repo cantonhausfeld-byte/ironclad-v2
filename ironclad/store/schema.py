@@ -166,6 +166,54 @@ def _bronze(conn: duckdb.DuckDBPyConnection) -> None:
     """)
 
     conn.execute("""
+    CREATE TABLE IF NOT EXISTS bronze.snap_counts (
+        season        INTEGER NOT NULL,
+        week          INTEGER NOT NULL,
+        game_id       VARCHAR,
+        player_id     VARCHAR NOT NULL,
+        player_name   VARCHAR,
+        team          VARCHAR NOT NULL,
+        position      VARCHAR,
+        offense_snaps INTEGER DEFAULT 0,
+        offense_pct   FLOAT   DEFAULT 0.0,
+        defense_snaps INTEGER DEFAULT 0,
+        defense_pct   FLOAT   DEFAULT 0.0,
+        st_snaps      INTEGER DEFAULT 0,
+        st_pct        FLOAT   DEFAULT 0.0,
+        _ingest_ts    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (season, week, player_id)
+    )
+    """)
+
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS bronze.player_stats_weekly (
+        season          INTEGER NOT NULL,
+        week            INTEGER NOT NULL,
+        player_id       VARCHAR NOT NULL,
+        player_name     VARCHAR,
+        team            VARCHAR,
+        position        VARCHAR,
+        completions     INTEGER DEFAULT 0,
+        attempts        INTEGER DEFAULT 0,
+        passing_yards   FLOAT   DEFAULT 0,
+        passing_tds     INTEGER DEFAULT 0,
+        interceptions   INTEGER DEFAULT 0,
+        carries         INTEGER DEFAULT 0,
+        rushing_yards   FLOAT   DEFAULT 0,
+        rushing_tds     INTEGER DEFAULT 0,
+        receptions      INTEGER DEFAULT 0,
+        targets         INTEGER DEFAULT 0,
+        receiving_yards FLOAT   DEFAULT 0,
+        receiving_tds   INTEGER DEFAULT 0,
+        target_share    FLOAT,
+        air_yards_share FLOAT,
+        wopr            FLOAT,
+        _ingest_ts      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (season, week, player_id)
+    )
+    """)
+
+    conn.execute("""
     CREATE TABLE IF NOT EXISTS bronze.stadiums (
         stadium_id   VARCHAR NOT NULL PRIMARY KEY,
         stadium_name VARCHAR NOT NULL,
@@ -302,6 +350,7 @@ def _silver(conn: duckdb.DuckDBPyConnection) -> None:
         depth_team    INTEGER,
         injury_status VARCHAR,
         availability  FLOAT NOT NULL DEFAULT 1.0,
+        snap_rate     FLOAT,
         PRIMARY KEY (season, week, player_id)
     )
     """)

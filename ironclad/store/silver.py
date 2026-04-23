@@ -306,6 +306,22 @@ class SilverTransformer:
             return 0
 
         df["availability"] = df["injury_status"].map(AVAILABILITY_MAP).fillna(AVAILABILITY_DEFAULT)
+
+        # Enrich with snap rate from bronze.snap_counts (nflverse)
+        try:
+            snap_df = self._conn.execute("""
+                SELECT player_id, season, week, offense_pct AS snap_rate
+                FROM bronze.snap_counts
+                WHERE offense_snaps > 0
+            """).df()
+            if not snap_df.empty:
+                df = df.merge(snap_df, on=["player_id", "season", "week"], how="left")
+            else:
+                df["snap_rate"] = None
+        except Exception as exc:
+            logger.debug("snap_counts join skipped (table may not exist yet): %s", exc)
+            df["snap_rate"] = None
+
         return self._writer.write_player_weekly_status(df)
 
     @staticmethod

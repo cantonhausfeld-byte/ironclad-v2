@@ -8,6 +8,8 @@ from ironclad.ingest.play_by_play import PBPIngestor
 from ironclad.ingest.rosters import RosterIngestor
 from ironclad.ingest.injuries import InjuryIngestor
 from ironclad.ingest.depth_charts import DepthChartIngestor
+from ironclad.ingest.snap_counts import SnapCountIngestor
+from ironclad.ingest.player_stats import PlayerStatsIngestor
 from ironclad.ingest.stadiums import StadiumIngestor
 from ironclad.ingest.weather import WeatherIngestor
 from ironclad.store.connection import get_connection
@@ -27,6 +29,8 @@ class IngestPipeline:
         self._rosters = RosterIngestor(writer)
         self._injuries = InjuryIngestor(writer)
         self._depth = DepthChartIngestor(writer)
+        self._snap_counts = SnapCountIngestor(writer)
+        self._player_stats = PlayerStatsIngestor(writer)
         self._stadiums = StadiumIngestor(writer)
         self._weather = WeatherIngestor(writer)
         self._conn = conn
@@ -57,6 +61,20 @@ class IngestPipeline:
 
         logger.info("=== Ingesting depth charts ===")
         counts["depth_charts"] = self._depth.ingest(seasons)
+
+        logger.info("=== Ingesting snap counts (nflverse) ===")
+        try:
+            counts["snap_counts"] = self._snap_counts.ingest(seasons)
+        except Exception as exc:
+            logger.warning("Snap count ingest failed (non-fatal): %s", exc)
+            counts["snap_counts"] = 0
+
+        logger.info("=== Ingesting player stats (nflverse) ===")
+        try:
+            counts["player_stats"] = self._player_stats.ingest(seasons)
+        except Exception as exc:
+            logger.warning("Player stats ingest failed (non-fatal): %s", exc)
+            counts["player_stats"] = 0
 
         if include_weather:
             logger.info("=== Ingesting weather ===")
