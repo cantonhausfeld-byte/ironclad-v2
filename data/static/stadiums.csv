@@ -32,3 +32,7 @@ SF,Levi's Stadium,SF,Santa Clara,CA,USA,false,grass,52,68500,37.4033,-121.9694
 TB,Raymond James Stadium,TB,Tampa,FL,USA,false,grass,9,65618,27.9759,-82.5033
 TEN,Nissan Stadium,TEN,Nashville,TN,USA,false,grass,440,69143,36.1665,-86.7713
 WAS,FedExField,WAS,Landover,MD,USA,false,grass,68,82000,38.9076,-76.8645
+OAK,Oakland-Alameda County Coliseum,OAK,Oakland,CA,USA,false,grass,13,56063,37.7516,-122.2005
+SD,Qualcomm Stadium,SD,San Diego,CA,USA,false,grass,17,70561,32.7831,-117.1197
+STL,Edward Jones Dome,STL,St. Louis,MO,USA,true,turf,465,66000,38.6328,-90.1878
+SL,Edward Jones Dome,SL,St. Louis,MO,USA,true,turf,465,66000,38.6328,-90.1878

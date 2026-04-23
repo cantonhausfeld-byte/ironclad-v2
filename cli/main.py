@@ -52,11 +52,15 @@ def backfill(seasons, season, no_pbp) -> None:
 @click.option("--season", required=True, type=int)
 @click.option("--week", required=True, type=int)
 def weekly(season, week) -> None:
-    """Run weekly refresh: ingest current data and rebuild silver tables."""
+    """Run weekly refresh: ingest → silver → gold features → target backfill."""
     click.echo(f"Running weekly refresh: season={season} week={week}")
     from ironclad.workflow.weekly import WeeklyWorkflow
-    WeeklyWorkflow().run(season, week)
-    click.echo("Done.")
+    result = WeeklyWorkflow().run(season, week)
+    click.echo(f"\nIngest:          {result.get('ingest', {})}")
+    click.echo(f"Silver:          {result.get('silver', {})}")
+    click.echo(f"Features built:  {result.get('features_built', 0)} games")
+    click.echo(f"Targets:         {result.get('targets', {})}")
+    click.echo("\nDone.")
 
 
 # ── report ────────────────────────────────────────────────────────────────────

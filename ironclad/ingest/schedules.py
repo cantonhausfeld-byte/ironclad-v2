@@ -8,6 +8,7 @@ import pandas as pd
 
 from ironclad.ingest.base import BaseIngestor
 from ironclad.store.writer import BronzeWriter
+from ironclad.store.normalization import normalize_teams
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,8 @@ def _clean(raw: pd.DataFrame) -> pd.DataFrame:
     df["gameday"] = pd.to_datetime(df["gameday"]).dt.date
     df["game_id"] = df["game_id"].astype(str)
     df = df.dropna(subset=["game_id", "away_team", "home_team"])
+    df["home_team"] = normalize_teams(df["home_team"])
+    df["away_team"] = normalize_teams(df["away_team"])
     # Ensure required columns exist
     for col in ["season_type", "week", "gameday"]:
         if col not in df.columns:

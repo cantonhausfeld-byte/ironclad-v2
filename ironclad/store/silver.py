@@ -8,6 +8,7 @@ import numpy as np
 
 from ironclad.config import AVAILABILITY_MAP, AVAILABILITY_DEFAULT
 from ironclad.store.connection import get_connection
+from ironclad.store.normalization import normalize_teams
 from ironclad.store.writer import SilverWriter
 
 logger = logging.getLogger(__name__)
@@ -80,6 +81,8 @@ class SilverTransformer:
             )
         )
         df = df.drop(columns=["home_moneyline", "away_moneyline"])
+        df["home_team"] = normalize_teams(df["home_team"])
+        df["away_team"] = normalize_teams(df["away_team"])
         return self._writer.write_games(df)
 
     # ── silver.team_game_stats ────────────────────────────────────────────────
@@ -143,6 +146,8 @@ class SilverTransformer:
         df = df.drop(columns=["home_team", "away_team", "home_score", "away_score"])
         df["punts"] = None
         df["first_downs"] = None
+        df["team"]     = normalize_teams(df["team"])
+        df["opponent"] = normalize_teams(df["opponent"])
         return self._writer.write_team_game_stats(df)
 
     # ── silver.player_game_stats ──────────────────────────────────────────────
@@ -261,6 +266,8 @@ class SilverTransformer:
             df["position"] = "UNK"
         else:
             df["position"] = df["position"].fillna("UNK")
+        df["team"]     = normalize_teams(df["team"])
+        df["opponent"] = normalize_teams(df["opponent"])
         return self._writer.write_player_game_stats(df)
 
     # ── silver.player_weekly_status ───────────────────────────────────────────

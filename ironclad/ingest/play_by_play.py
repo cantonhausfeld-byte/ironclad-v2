@@ -8,6 +8,7 @@ import pandas as pd
 
 from ironclad.ingest.base import BaseIngestor
 from ironclad.store.writer import BronzeWriter
+from ironclad.store.normalization import normalize_teams
 
 logger = logging.getLogger(__name__)
 
@@ -54,4 +55,7 @@ def _clean(raw: pd.DataFrame) -> pd.DataFrame:
     for col in int_flags:
         if col in df.columns:
             df[col] = df[col].fillna(0).astype(int)
+    for col in ["home_team", "away_team", "posteam", "defteam"]:
+        if col in df.columns:
+            df[col] = normalize_teams(df[col])
     return df
