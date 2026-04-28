@@ -86,7 +86,7 @@ class PlayerFeatureBuilder:
         pid = str(player["player_id"])
         pos = player.get("position", "UNK")
         recent = snap.player_recent_games(pid, n=ROLLING_WINDOW)
-        recent_status = snap.player_recent_status(pid, season, week, n=ROLLING_WINDOW)
+        recent_status = snap.player_recent_status(pid, int(game["season"]), int(game["week"]), n=ROLLING_WINDOW)
 
         # Team volume denominators from rolling L4
         team_pass_att = float(team_recent["pass_attempts"].mean()) if not team_recent.empty and "pass_attempts" in team_recent.columns else 30.0
@@ -196,7 +196,7 @@ def _avg_col(df: pd.DataFrame, col: str, default=None):
 
 
 def _fallback_roster(team: str, season: int, week: int, snap: FeatureSnapshot) -> pd.DataFrame:
-    df = snap.reader.read_as_of("silver.player_weekly_status")
+    df = snap.reader.read_as_of("silver.player_weekly_status", ts_col="_silver_ts")
     df = df[(df["team"] == team) & (df["season"] == season) & (df["week"] <= week)]
     if df.empty:
         return pd.DataFrame()

@@ -303,6 +303,7 @@ def _silver(conn: duckdb.DuckDBPyConnection) -> None:
         total_air_yards  FLOAT,
         -- Pressure proxy
         sack_rate        FLOAT,
+        _silver_ts       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         PRIMARY KEY (game_id, team)
     )
     """)
@@ -335,6 +336,7 @@ def _silver(conn: duckdb.DuckDBPyConnection) -> None:
         rz_targets        INTEGER DEFAULT 0,
         rz_carries        INTEGER DEFAULT 0,
         total_tds         INTEGER DEFAULT 0,
+        _silver_ts        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         PRIMARY KEY (game_id, player_id)
     )
     """)
@@ -351,6 +353,7 @@ def _silver(conn: duckdb.DuckDBPyConnection) -> None:
         injury_status VARCHAR,
         availability  FLOAT NOT NULL DEFAULT 1.0,
         snap_rate     FLOAT,
+        _silver_ts    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         PRIMARY KEY (season, week, player_id)
     )
     """)

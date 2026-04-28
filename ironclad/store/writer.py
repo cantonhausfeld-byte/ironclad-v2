@@ -103,14 +103,17 @@ class SilverWriter(_BaseWriter):
 
     def write_team_game_stats(self, df: pd.DataFrame) -> int:
         df = df.copy()
+        df["_silver_ts"] = _now()
         return self._upsert(df, "silver.team_game_stats", ["game_id", "team"])
 
     def write_player_game_stats(self, df: pd.DataFrame) -> int:
         df = df.copy()
+        df["_silver_ts"] = _now()
         return self._upsert(df, "silver.player_game_stats", ["game_id", "player_id"])
 
     def write_player_weekly_status(self, df: pd.DataFrame) -> int:
         df = df.copy()
+        df["_silver_ts"] = _now()
         return self._upsert(df, "silver.player_weekly_status", ["season", "week", "player_id"])
 
 

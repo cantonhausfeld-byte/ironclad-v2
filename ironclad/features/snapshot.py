@@ -26,7 +26,7 @@ class FeatureSnapshot:
 
     def team_recent_games(self, team: str, n: int = 4) -> pd.DataFrame:
         """Last n completed games for team, prior to cutoff."""
-        df = self.reader.read_as_of("silver.team_game_stats")
+        df = self.reader.read_as_of("silver.team_game_stats", ts_col="_silver_ts")
         df = df[df["team"] == team].copy()
         # Filter to games before cutoff (use silver.games for dates)
         games = self.reader.read_as_of("silver.games", ts_col="_silver_ts")
@@ -39,7 +39,7 @@ class FeatureSnapshot:
 
     def team_season_games(self, team: str, season: int) -> pd.DataFrame:
         """All completed games for team in season, prior to cutoff."""
-        df = self.reader.read_as_of("silver.team_game_stats")
+        df = self.reader.read_as_of("silver.team_game_stats", ts_col="_silver_ts")
         df = df[(df["team"] == team) & (df["season"] == season)].copy()
         games = self.reader.read_as_of("silver.games", ts_col="_silver_ts")
         games["gameday"] = pd.to_datetime(games["gameday"])
@@ -51,7 +51,7 @@ class FeatureSnapshot:
 
     def player_recent_games(self, player_id: str, n: int = 4) -> pd.DataFrame:
         """Last n games for a player prior to cutoff."""
-        df = self.reader.read_as_of("silver.player_game_stats")
+        df = self.reader.read_as_of("silver.player_game_stats", ts_col="_silver_ts")
         df = df[df["player_id"] == player_id].copy()
         games = self.reader.read_as_of("silver.games", ts_col="_silver_ts")
         games["gameday"] = pd.to_datetime(games["gameday"])
@@ -62,7 +62,7 @@ class FeatureSnapshot:
 
     def player_status(self, player_id: str, season: int, week: int) -> pd.Series | None:
         """Most recent injury/depth status for player as of cutoff."""
-        df = self.reader.read_as_of("silver.player_weekly_status")
+        df = self.reader.read_as_of("silver.player_weekly_status", ts_col="_silver_ts")
         df = df[(df["player_id"] == player_id) & (df["season"] == season) & (df["week"] <= week)]
         if df.empty:
             return None
@@ -70,7 +70,7 @@ class FeatureSnapshot:
 
     def player_recent_status(self, player_id: str, season: int, week: int, n: int = 4) -> pd.DataFrame:
         """Last n weekly status rows for a player prior to the target week (includes snap_rate)."""
-        df = self.reader.read_as_of("silver.player_weekly_status")
+        df = self.reader.read_as_of("silver.player_weekly_status", ts_col="_silver_ts")
         df = df[(df["player_id"] == player_id) & (df["season"] == season) & (df["week"] < week)]
         return df.sort_values("week").tail(n)
 
@@ -83,5 +83,5 @@ class FeatureSnapshot:
 
     def team_players_for_game(self, team: str, season: int, week: int) -> pd.DataFrame:
         """All players with weekly status for team in given week."""
-        df = self.reader.read_as_of("silver.player_weekly_status")
+        df = self.reader.read_as_of("silver.player_weekly_status", ts_col="_silver_ts")
         return df[(df["team"] == team) & (df["season"] == season) & (df["week"] == week)]
