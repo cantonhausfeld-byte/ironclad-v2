@@ -21,6 +21,8 @@ class _BaseWriter:
         """Insert rows that don't already exist (idempotent by primary key)."""
         if df.empty:
             return 0
+        # Deduplicate within the batch before hitting DB constraints
+        df = df.drop_duplicates(subset=pk_cols, keep="last")
         tmp = f"_tmp_{table.replace('.', '_')}"
         self._conn.register(tmp, df)
         pk_cond = " AND ".join(f"t.{c} = s.{c}" for c in pk_cols)
