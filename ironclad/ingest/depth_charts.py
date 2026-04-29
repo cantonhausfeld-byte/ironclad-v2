@@ -12,7 +12,7 @@ from ironclad.store.writer import BronzeWriter
 logger = logging.getLogger(__name__)
 
 # nfl_data_py uses club_code; normalise to team before selecting
-_RAW_RENAMES = {"club_code": "team", "full_name": "player_name", "player_display_name": "player_name"}
+_RAW_RENAMES = {"club_code": "team", "gsis_id": "player_id", "full_name": "player_name", "player_display_name": "player_name"}
 
 _KEEP = [
     "season", "team", "week", "depth_team",

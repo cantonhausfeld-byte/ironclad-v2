@@ -12,8 +12,10 @@ from ironclad.store.writer import BronzeWriter
 logger = logging.getLogger(__name__)
 
 _RAW_RENAMES = {
+    "gsis_id": "player_id",
     "full_name": "player_name",
     "primary_injury": "injury_type",
+    "report_primary_injury": "injury_type",
     "date_modified": "report_date",
 }
 
