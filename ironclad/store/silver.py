@@ -253,7 +253,10 @@ class SilverTransformer:
                 FROM bronze.rosters
                 WHERE position IS NOT NULL AND position != ''
             """).df()
-            rosters = rosters[rosters["rn"] == 1][["player_id", "season", "position"]]
+            rosters = (
+                rosters[rosters["rn"] == 1][["player_id", "season", "position"]]
+                .drop_duplicates(subset=["player_id", "season"])
+            )
             if not rosters.empty:
                 df = df.merge(rosters, on=["player_id", "season"], how="left", suffixes=("_old", ""))
                 if "position_old" in df.columns:
@@ -268,6 +271,7 @@ class SilverTransformer:
             df["position"] = df["position"].fillna("UNK")
         df["team"]     = normalize_teams(df["team"])
         df["opponent"] = normalize_teams(df["opponent"])
+        df = df.drop_duplicates(subset=["game_id", "player_id"], keep="first")
         return self._writer.write_player_game_stats(df)
 
     # ── silver.player_weekly_status ───────────────────────────────────────────
