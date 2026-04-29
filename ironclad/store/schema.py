@@ -408,6 +408,9 @@ def _gold(conn: duckdb.DuckDBPyConnection) -> None:
         target_points_scored     FLOAT,
         target_yards_total       FLOAT,
         target_pass_rate         FLOAT,
+        target_home_win          BOOLEAN,
+        target_home_margin       INTEGER,
+        target_total_score       INTEGER,
         PRIMARY KEY (game_id, team)
     )
     """)

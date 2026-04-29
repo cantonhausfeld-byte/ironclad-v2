@@ -125,9 +125,9 @@ def _lookup_game_id(home: str, away: str, week: int, season: int) -> str | None:
 # ── train ─────────────────────────────────────────────────────────────────────
 
 @cli.command()
-@click.option("--train-seasons", default="2016-2022",
-              help="Season range for training, e.g. '2016-2022' or '2018,2019,2020'")
-@click.option("--val-seasons", default="2023",
+@click.option("--train-seasons", default="2016-2024",
+              help="Season range for training, e.g. '2016-2024' or '2018,2019,2020'")
+@click.option("--val-seasons", default="2025",
               help="Season range for validation/calibration")
 @click.option("--model", default="all",
               type=click.Choice(["all", "game-outcome", "score-env", "player-usage", "player-efficiency"]),
@@ -163,7 +163,7 @@ def train(train_seasons, val_seasons, model) -> None:
 # ── evaluate ──────────────────────────────────────────────────────────────────
 
 @cli.command()
-@click.option("--val-seasons", default="2023",
+@click.option("--val-seasons", default="2025",
               help="Seasons to evaluate against (comma-separated or range)")
 def evaluate(val_seasons) -> None:
     """Evaluate trained models against held-out seasons."""

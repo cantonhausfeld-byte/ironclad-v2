@@ -26,19 +26,25 @@ class TargetBackfiller:
 
     def _fill_team_targets(self, seasons: list[int] | None) -> int:
         where = self._season_filter("t.season", seasons)
-        updated = self._conn.execute(f"""
+        rows = self._conn.execute(f"""
             UPDATE gold.team_game_features AS t
             SET
                 target_points_scored = s.points_scored,
                 target_yards_total   = s.total_yards,
-                target_pass_rate     = s.pass_rate
+                target_pass_rate     = s.pass_rate,
+                target_home_win      = g.home_win,
+                target_home_margin   = g.home_margin,
+                target_total_score   = g.total_score
             FROM silver.team_game_stats s
+            JOIN silver.games g ON s.game_id = g.game_id
             WHERE t.game_id = s.game_id
               AND t.team    = s.team
               AND t.target_points_scored IS NULL
               AND s.points_scored IS NOT NULL
             {where.replace('WHERE', 'AND')}
-        """).rowcount
+            RETURNING t.game_id
+        """).df()
+        updated = len(rows)
         logger.info("Filled %d team target rows", updated)
         return updated
 
@@ -46,7 +52,7 @@ class TargetBackfiller:
 
     def _fill_player_targets(self, seasons: list[int] | None) -> int:
         where = self._season_filter("p.season", seasons)
-        updated = self._conn.execute(f"""
+        rows = self._conn.execute(f"""
             UPDATE gold.player_game_features AS p
             SET
                 target_targets    = s.targets,
@@ -61,7 +67,9 @@ class TargetBackfiller:
               AND p.target_targets IS NULL
               AND s.targets IS NOT NULL
             {where.replace('WHERE', 'AND')}
-        """).rowcount
+            RETURNING p.game_id
+        """).df()
+        updated = len(rows)
         logger.info("Filled %d player target rows", updated)
         return updated
 
