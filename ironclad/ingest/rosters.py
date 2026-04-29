@@ -24,8 +24,16 @@ class RosterIngestor(BaseIngestor):
 
     def _ingest(self, seasons: list[int]) -> int:
         logger.info("Fetching weekly rosters for seasons %s", seasons)
-        raw = nfl.import_weekly_rosters(seasons)
-        df = _clean(raw)
+        frames = []
+        for season in seasons:
+            try:
+                raw = nfl.import_weekly_rosters([season])
+                frames.append(_clean(raw))
+            except Exception as exc:
+                logger.warning("Roster fetch failed for %d: %s", season, exc)
+        if not frames:
+            return 0
+        df = pd.concat(frames, ignore_index=True)
         n = self._writer.write_rosters(df)
         logger.info("Wrote %d roster rows", n)
         return n
