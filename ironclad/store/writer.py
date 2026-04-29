@@ -24,9 +24,10 @@ class _BaseWriter:
         tmp = f"_tmp_{table.replace('.', '_')}"
         self._conn.register(tmp, df)
         pk_cond = " AND ".join(f"t.{c} = s.{c}" for c in pk_cols)
+        cols = ", ".join(df.columns)
         sql = f"""
-        INSERT INTO {table}
-        SELECT * FROM {tmp} s
+        INSERT INTO {table} ({cols})
+        SELECT {cols} FROM {tmp} s
         WHERE NOT EXISTS (SELECT 1 FROM {table} t WHERE {pk_cond})
         """
         self._conn.execute(sql)
@@ -39,7 +40,8 @@ class _BaseWriter:
             return 0
         tmp = f"_tmp_{table.replace('.', '_')}"
         self._conn.register(tmp, df)
-        self._conn.execute(f"INSERT INTO {table} SELECT * FROM {tmp}")
+        cols = ", ".join(df.columns)
+        self._conn.execute(f"INSERT INTO {table} ({cols}) SELECT {cols} FROM {tmp}")
         self._conn.unregister(tmp)
         return len(df)
 
