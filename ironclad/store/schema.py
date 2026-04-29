@@ -484,16 +484,34 @@ def _gold(conn: duckdb.DuckDBPyConnection) -> None:
 
 # ── Migrations (additive column additions for existing DBs) ───────────────────
 
+# Map each mutable table to its expected columns and types.
+# Any column listed here that is absent from the live table gets added via
+# ALTER TABLE ADD COLUMN IF NOT EXISTS.  Bronze tables are append-only and
+# never need migration.
+_EXPECTED_COLS: dict[str, list[tuple[str, str]]] = {
+    "silver.team_game_stats": [
+        ("_silver_ts", "TIMESTAMPTZ DEFAULT NOW()"),
+    ],
+    "silver.player_game_stats": [
+        ("rz_targets",   "INTEGER DEFAULT 0"),
+        ("rz_carries",   "INTEGER DEFAULT 0"),
+        ("total_tds",    "INTEGER DEFAULT 0"),
+        ("_silver_ts",   "TIMESTAMPTZ DEFAULT NOW()"),
+    ],
+    "silver.player_weekly_status": [
+        ("snap_rate",  "FLOAT"),
+        ("_silver_ts", "TIMESTAMPTZ DEFAULT NOW()"),
+    ],
+    "gold.team_game_features": [
+        ("target_home_win",    "BOOLEAN"),
+        ("target_home_margin", "INTEGER"),
+        ("target_total_score", "INTEGER"),
+    ],
+}
+
+
 def _migrate(conn: duckdb.DuckDBPyConnection) -> None:
-    """Add columns introduced after initial schema without dropping existing tables."""
-    _add_col_if_missing = lambda tbl, col, typ: conn.execute(
-        f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS {col} {typ}"
-    )
-    # _silver_ts added to silver stat tables
-    _add_col_if_missing("silver.team_game_stats",     "_silver_ts", "TIMESTAMPTZ DEFAULT NOW()")
-    _add_col_if_missing("silver.player_game_stats",   "_silver_ts", "TIMESTAMPTZ DEFAULT NOW()")
-    _add_col_if_missing("silver.player_weekly_status", "_silver_ts", "TIMESTAMPTZ DEFAULT NOW()")
-    # target columns added to gold.team_game_features
-    _add_col_if_missing("gold.team_game_features", "target_home_win",    "BOOLEAN")
-    _add_col_if_missing("gold.team_game_features", "target_home_margin", "INTEGER")
-    _add_col_if_missing("gold.team_game_features", "target_total_score", "INTEGER")
+    """Ensure every expected column exists; adds missing ones without data loss."""
+    for table, cols in _EXPECTED_COLS.items():
+        for col, typ in cols:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {typ}")
