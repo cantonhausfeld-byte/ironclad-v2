@@ -80,7 +80,7 @@ def _bronze(conn: duckdb.DuckDBPyConnection) -> None:
         rusher_player_id       VARCHAR,
         rusher_player_name     VARCHAR,
         _ingest_ts             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        PRIMARY KEY (play_id)
+        PRIMARY KEY (game_id, play_id)
     )
     """)
 

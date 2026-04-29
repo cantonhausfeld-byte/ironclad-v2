@@ -53,7 +53,7 @@ class BronzeWriter(_BaseWriter):
     def write_play_by_play(self, df: pd.DataFrame) -> int:
         df = df.copy()
         df["_ingest_ts"] = _now()
-        return self._upsert(df, "bronze.play_by_play", ["play_id"])
+        return self._upsert(df, "bronze.play_by_play", ["game_id", "play_id"])
 
     def write_rosters(self, df: pd.DataFrame) -> int:
         df = df.copy()
