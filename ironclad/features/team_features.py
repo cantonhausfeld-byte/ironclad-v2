@@ -49,8 +49,9 @@ class TeamFeatureBuilder:
         for _, g in games.iterrows():
             try:
                 game_cutoff = _parse_kickoff(g["gameday"], g.get("gametime_local")) if cutoff_ts is None else cutoff_ts
-                self.build_for_game(g["game_id"], game_cutoff)
-                total += 1
+                df = self.build_for_game(g["game_id"], game_cutoff)
+                if not df.empty:
+                    total += 1
             except Exception as exc:
                 logger.warning("Features failed for %s: %s", g["game_id"], exc)
         return total
@@ -82,7 +83,7 @@ class TeamFeatureBuilder:
             d = default if default is not None else LEAGUE_PRIORS.get(default_key or col, 0.0)
             if recent.empty:
                 return d
-            all_stats = snap.reader.read_as_of("silver.team_game_stats")
+            all_stats = snap.reader.read_table("silver.team_game_stats")
             opp_rows = all_stats[
                 all_stats["game_id"].isin(recent["game_id"]) &
                 (all_stats["opponent"] == team)

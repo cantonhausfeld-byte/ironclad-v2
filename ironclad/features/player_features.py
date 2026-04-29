@@ -196,7 +196,7 @@ def _avg_col(df: pd.DataFrame, col: str, default=None):
 
 
 def _fallback_roster(team: str, season: int, week: int, snap: FeatureSnapshot) -> pd.DataFrame:
-    df = snap.reader.read_as_of("silver.player_weekly_status", ts_col="_silver_ts")
+    df = snap.reader.read_table("silver.player_weekly_status")
     df = df[(df["team"] == team) & (df["season"] == season) & (df["week"] <= week)]
     if df.empty:
         return pd.DataFrame()
