@@ -6,6 +6,7 @@ def create_all_tables(conn: duckdb.DuckDBPyConnection) -> None:
     _bronze(conn)
     _silver(conn)
     _gold(conn)
+    _migrate(conn)
 
 
 # ── Bronze ─────────────────────────────────────────────────────────────────────
@@ -479,3 +480,20 @@ def _gold(conn: duckdb.DuckDBPyConnection) -> None:
         PRIMARY KEY (prediction_id)
     )
     """)
+
+
+# ── Migrations (additive column additions for existing DBs) ───────────────────
+
+def _migrate(conn: duckdb.DuckDBPyConnection) -> None:
+    """Add columns introduced after initial schema without dropping existing tables."""
+    _add_col_if_missing = lambda tbl, col, typ: conn.execute(
+        f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS {col} {typ}"
+    )
+    # _silver_ts added to silver stat tables
+    _add_col_if_missing("silver.team_game_stats",     "_silver_ts", "TIMESTAMPTZ DEFAULT NOW()")
+    _add_col_if_missing("silver.player_game_stats",   "_silver_ts", "TIMESTAMPTZ DEFAULT NOW()")
+    _add_col_if_missing("silver.player_weekly_status", "_silver_ts", "TIMESTAMPTZ DEFAULT NOW()")
+    # target columns added to gold.team_game_features
+    _add_col_if_missing("gold.team_game_features", "target_home_win",    "BOOLEAN")
+    _add_col_if_missing("gold.team_game_features", "target_home_margin", "INTEGER")
+    _add_col_if_missing("gold.team_game_features", "target_total_score", "INTEGER")
