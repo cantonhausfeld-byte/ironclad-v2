@@ -66,7 +66,7 @@ def build_report_context(
         }
 
     # Player tables by position group
-    def player_table(team: str, positions: list[str], metrics: list[str]) -> list[dict]:
+    def player_table(team: str, positions: list[str], metrics: list[str], top_n: int | None = None) -> list[dict]:
         if player_df.empty:
             return []
         tdf = player_df[(player_df["team"] == team) & (player_df["position"].isin(positions))]
@@ -94,6 +94,15 @@ def build_report_context(
             r = pivot(p["player_id"], p["player_name"], p["position"])
             if r:
                 result_rows.append(r)
+
+        # Sort by mean of first metric descending, then trim to top_n
+        primary = metrics[0]
+        result_rows.sort(
+            key=lambda r: r.get(primary, 0) if isinstance(r.get(primary), (int, float)) else 0,
+            reverse=True,
+        )
+        if top_n is not None:
+            result_rows = result_rows[:top_n]
         return result_rows
 
     return {
@@ -120,12 +129,12 @@ def build_report_context(
         "vegas_spread": game_meta.get("spread_consensus", "N/A"),
         "home_stats": team_stats(home_team),
         "away_stats": team_stats(away_team),
-        "home_qb": player_table(home_team, ["QB"], ["pass_attempts", "completions", "pass_yards", "tds"]),
-        "away_qb": player_table(away_team, ["QB"], ["pass_attempts", "completions", "pass_yards", "tds"]),
-        "home_rb": player_table(home_team, ["RB", "FB"], ["carries", "rush_yards", "targets", "receptions", "rec_yards", "tds"]),
-        "away_rb": player_table(away_team, ["RB", "FB"], ["carries", "rush_yards", "targets", "receptions", "rec_yards", "tds"]),
-        "home_wr_te": player_table(home_team, ["WR", "TE"], ["targets", "receptions", "rec_yards", "tds"]),
-        "away_wr_te": player_table(away_team, ["WR", "TE"], ["targets", "receptions", "rec_yards", "tds"]),
+        "home_qb": player_table(home_team, ["QB"], ["pass_attempts", "completions", "pass_yards", "tds"], top_n=2),
+        "away_qb": player_table(away_team, ["QB"], ["pass_attempts", "completions", "pass_yards", "tds"], top_n=2),
+        "home_rb": player_table(home_team, ["RB", "FB"], ["carries", "rush_yards", "targets", "receptions", "rec_yards", "tds"], top_n=4),
+        "away_rb": player_table(away_team, ["RB", "FB"], ["carries", "rush_yards", "targets", "receptions", "rec_yards", "tds"], top_n=4),
+        "home_wr_te": player_table(home_team, ["WR", "TE"], ["targets", "receptions", "rec_yards", "tds"], top_n=6),
+        "away_wr_te": player_table(away_team, ["WR", "TE"], ["targets", "receptions", "rec_yards", "tds"], top_n=6),
         "confidence": confidence,
         "cutoff_ts": cutoff_ts.strftime("%Y-%m-%d %H:%M UTC"),
         "model_version": model_version,
