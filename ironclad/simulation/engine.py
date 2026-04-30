@@ -126,7 +126,21 @@ class MonteCarloEngine:
                 yards_per_carry_std=eff["yards_per_carry_std"],
             )
             contexts.append(ctx)
+
+        contexts = _allocate_qb_pass_volume(contexts)
         return contexts
+
+
+def _allocate_qb_pass_volume(contexts: list[PlayerContext]) -> list[PlayerContext]:
+    """Give all pass volume to the primary QB; backup QBs get zero pass attempts."""
+    qbs = [ctx for ctx in contexts if ctx.position == "QB"]
+    if len(qbs) <= 1:
+        return contexts
+    primary = max(qbs, key=lambda c: c.pass_attempts_projected + c.carries_projected)
+    for ctx in qbs:
+        if ctx is not primary:
+            ctx.pass_attempts_projected = 0.0
+    return contexts
 
 
 def _try_load(registry: ModelRegistry, name: str, fallback_cls):

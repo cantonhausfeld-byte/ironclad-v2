@@ -88,6 +88,11 @@ class PlayerEfficiencyModel(BaseModel):
         return self._predict_stub(X, pos)
 
     def _predict_trained(self, X: pd.DataFrame, pos: str) -> dict:
+        # QB efficiency model was trained on receiving stats (always 0 for QBs),
+        # so trained regressors are useless for QBs — use priors instead.
+        if pos == "QB":
+            return self._predict_stub(X, pos)
+
         feat_cols = [c for c in FEATURES if c in X.columns]
         Xm = _to_xgb(X[feat_cols])
         regs = self._regs[pos]
