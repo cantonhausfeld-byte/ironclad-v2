@@ -42,8 +42,8 @@ class PlayerFeatureBuilder:
             (game["away_team"], game["home_team"], False),
         ]:
             players = snap.team_players_for_game(team, season, week)
-            if players.empty:
-                players = _fallback_roster(team, season, week, snap)
+            # Always supplement from roster to capture healthy players not on injury report
+            players = _supplement_from_roster(players, team, season, week, snap)
 
             opp_feats = team_feats[team_feats["team"] == opponent]
             own_feats = team_feats[team_feats["team"] == team]
@@ -195,9 +195,28 @@ def _avg_col(df: pd.DataFrame, col: str, default=None):
     return float(vals.mean()) if len(vals) else default
 
 
-def _fallback_roster(team: str, season: int, week: int, snap: FeatureSnapshot) -> pd.DataFrame:
-    df = snap.reader.read_table("silver.player_weekly_status")
-    df = df[(df["team"] == team) & (df["season"] == season) & (df["week"] <= week)]
-    if df.empty:
-        return pd.DataFrame()
-    return df[df["week"] == df["week"].max()]
+def _supplement_from_roster(
+    players: pd.DataFrame,
+    team: str,
+    season: int,
+    week: int,
+    snap: FeatureSnapshot,
+) -> pd.DataFrame:
+    """Add roster players not already in players (e.g. healthy starters absent from injury report)."""
+    roster = snap.reader.read_table("bronze.rosters")
+    roster = roster[(roster["team"] == team) & (roster["season"] == season) & (roster["week"] <= week)]
+    if roster.empty:
+        return players
+    roster = roster[roster["week"] == roster["week"].max()].copy()
+    # Keep only skill positions worth projecting
+    if "position" in roster.columns:
+        roster = roster[roster["position"].isin(SKILL_POSITIONS)]
+    roster["availability"] = 1.0
+    roster["depth_team"] = None
+    # Remove players already covered by injury/depth chart data
+    if not players.empty and "player_id" in players.columns:
+        covered = set(players["player_id"].astype(str))
+        roster = roster[~roster["player_id"].astype(str).isin(covered)]
+    if roster.empty:
+        return players
+    return pd.concat([players, roster], ignore_index=True) if not players.empty else roster

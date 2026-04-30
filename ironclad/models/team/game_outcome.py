@@ -198,8 +198,13 @@ def _build_diff_features(X: pd.DataFrame) -> pd.DataFrame:
         ("spread_from_odds", 0.0),
         ("home_win_prob_from_odds", LEAGUE_HOME_WIN_PROB),
     ]:
-        if col not in out.columns:
-            out[col] = default
+        # Training data has home_/away_ prefixes — try home-side first
+        home_col = f"home_{col}"
+        if col not in out.columns or out[col].isna().all():
+            if home_col in X.columns:
+                out[col] = X[home_col]
+            elif col not in out.columns:
+                out[col] = default
         out[col] = pd.to_numeric(out[col], errors="coerce").fillna(default)
 
     return out

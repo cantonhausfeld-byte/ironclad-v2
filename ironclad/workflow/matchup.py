@@ -101,13 +101,15 @@ class MatchupWorkflow:
 
         # Build report context
         game_meta = dict(game_row)
-        game_meta["stadium"] = game_meta.get("stadium_id", "Unknown Stadium")
+        game_meta["stadium"] = game_meta.get("stadium_name") or game_meta.get("stadium_id", "Unknown Stadium")
         game_meta["data_completeness_score"] = float(home_feats.get("data_completeness_score", pd.Series([0.5])).iloc[0]) if not home_feats.empty else 0.5
 
+        model_version = self._get_model_version(conn)
         ctx = build_report_context(
             result=result,
             game_meta=game_meta,
             cutoff_ts=cutoff_ts,
+            model_version=model_version,
             n_draws=self.n_draws,
         )
 
@@ -127,10 +129,21 @@ class MatchupWorkflow:
         return md_path
 
     def _get_game(self, conn, game_id: str) -> pd.Series | None:
-        df = conn.execute(
-            "SELECT * FROM silver.games WHERE game_id = ?", [game_id]
-        ).df()
+        df = conn.execute("""
+            SELECT g.*, s.stadium_name, s.city, s.state
+            FROM silver.games g
+            LEFT JOIN bronze.stadiums s ON g.home_team = s.team
+            WHERE g.game_id = ?
+        """, [game_id]).df()
         return df.iloc[0] if not df.empty else None
+
+    def _get_model_version(self, conn) -> str:
+        from ironclad.models.registry import ModelRegistry
+        try:
+            meta = ModelRegistry().metadata("game_outcome")
+            return meta.get("version", "v1.0")
+        except Exception:
+            return "stub_v1"
 
     def _compute_cutoff(self, game_row: pd.Series) -> datetime:
         kickoff = _parse_kickoff(game_row["gameday"], game_row.get("gametime_local"))

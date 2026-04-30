@@ -166,11 +166,8 @@ class ModelTrainer:
         """).df()
         if df.empty:
             return pd.DataFrame(), pd.DataFrame()
-        df["target_plays_total"] = None
-        df["target_sack_rate"] = None
         y_cols = [c for c in [
             "target_pass_rate", "target_points_scored", "target_yards_total",
-            "target_plays_total", "target_sack_rate",
         ] if c in df.columns]
         return df, df[y_cols].copy()
 

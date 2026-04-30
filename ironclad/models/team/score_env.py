@@ -40,9 +40,7 @@ class ScoreEnvironmentModel(BaseModel):
 
         targets = {
             "_reg_pass_rate":  "target_pass_rate",
-            "_reg_plays":      "target_plays_total",
             "_reg_team_total": "target_points_scored",
-            "_reg_sack_rate":  "target_sack_rate",
         }
         for attr, tgt in targets.items():
             if tgt not in y.columns:
