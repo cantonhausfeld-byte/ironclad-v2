@@ -81,7 +81,7 @@ class GameOutcomeModel(BaseModel):
         self._clf = XGBClassifier(
             n_estimators=300, learning_rate=0.05, max_depth=4,
             subsample=0.8, colsample_bytree=0.8,
-            eval_metric="logloss", use_label_encoder=False,
+            eval_metric="logloss",
             random_state=42, n_jobs=-1,
         )
         self._clf.fit(Xm, y_win)

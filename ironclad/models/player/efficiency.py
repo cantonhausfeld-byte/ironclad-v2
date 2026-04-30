@@ -119,8 +119,8 @@ class PlayerEfficiencyModel(BaseModel):
             "yards_per_carry": yds_per_carry,
             "td_rate_per_target": td_rate_tgt,
             "td_rate_per_carry": td_rate_carry,
-            "yards_per_target_std": yds_per_tgt * 0.7,
-            "yards_per_carry_std": yds_per_carry * 0.9,
+            "yards_per_target_std": max(0.5, yds_per_tgt * 0.7),
+            "yards_per_carry_std": max(0.5, yds_per_carry * 0.9),
         }
 
     def _predict_stub(self, X: pd.DataFrame, pos: str) -> dict:
@@ -145,6 +145,8 @@ class PlayerEfficiencyModel(BaseModel):
             catch_rate = max(0.1, min(1.0, catch_rate * eff_adj))
         if yds_per_tgt is not None:
             yds_per_tgt = max(2.0, yds_per_tgt * eff_adj)
+        if yds_per_carry is not None:
+            yds_per_carry = max(1.0, yds_per_carry)
 
         return {
             "catch_rate": catch_rate,

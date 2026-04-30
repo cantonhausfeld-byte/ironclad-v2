@@ -120,7 +120,10 @@ class PlayerDraw:
         if ctx.position == "QB" and ctx.pass_attempts_projected > 0:
             lam = max(0.0, ctx.pass_attempts_projected * pass_scale)
             pass_att = poisson_draw(rng, lam)
-            comp_rate = ctx.catch_rate or 0.64
+            # Clamp to realistic NFL completion rate range; ctx.catch_rate may
+            # reflect a receiving catch rate (meaningless for QBs) rather than
+            # pass completion rate.
+            comp_rate = max(0.50, min(0.75, ctx.catch_rate or 0.64))
             completions = int(rng.binomial(pass_att, comp_rate))
             pass_yards = max(0.0, float(rng.normal(
                 completions * (ctx.yards_per_target or 8.5),
