@@ -48,6 +48,12 @@ class Reconciler:
             for p in players:
                 p.rec_yards = max(0.0, p.rec_yards * scale)
 
+        # QB pass_yards = total receiving yards (same yardage pool, now reconciled)
+        total_rec_after = sum(p.rec_yards for p in players)
+        for p in players:
+            if p.pass_attempts > 0:
+                p.pass_yards = total_rec_after
+
         total_rush = sum(p.rush_yards for p in players)
         if total_rush > 0:
             scale = team_rush_yards / total_rush
@@ -72,8 +78,8 @@ class Reconciler:
                     w += p.targets * ctx.td_rate_per_target
                 if p.carries > 0 and ctx.td_rate_per_carry:
                     w += p.carries * ctx.td_rate_per_carry
-                if p.pass_attempts > 0:  # QB passing TDs
-                    w += p.completions * 0.05
+                if p.pass_attempts > 0 and ctx.td_rate_per_target:  # QB passing TDs
+                    w += p.pass_attempts * ctx.td_rate_per_target
                 weights.append(max(w, 0.01))
 
             total_w = sum(weights)
