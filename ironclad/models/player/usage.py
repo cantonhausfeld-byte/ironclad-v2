@@ -20,6 +20,12 @@ _POSITION_PRIORS = {
 }
 _DEFAULT_PRIOR = {"targets": 2.0, "carries": 1.0, "pass_attempts": 0.0}
 
+
+def _to_xgb(df: pd.DataFrame) -> pd.DataFrame:
+    """Coerce all columns to float for XGBoost (handles nullable int / object dtype)."""
+    return df.apply(pd.to_numeric, errors="coerce").fillna(0)
+
+
 FEATURES = [
     "availability", "depth_team",
     "target_share_l4", "carry_share_l4", "air_yards_share_l4",
@@ -54,7 +60,7 @@ class PlayerUsageModel(BaseModel):
             mask_pos = X["position"] == pos
             if mask_pos.sum() < 20:
                 continue
-            Xp = X[mask_pos][feat_cols].fillna(0)
+            Xp = _to_xgb(X[mask_pos][feat_cols])
             self._regs[pos] = {}
             for out_key, tgt_col in target_map.items():
                 if tgt_col not in y.columns:
@@ -87,7 +93,7 @@ class PlayerUsageModel(BaseModel):
 
     def _predict_trained(self, X: pd.DataFrame, pos: str, availability: float) -> dict:
         feat_cols = [c for c in FEATURES if c in X.columns]
-        Xm = X[feat_cols].fillna(0)
+        Xm = _to_xgb(X[feat_cols])
         regs = self._regs[pos]
 
         def pred(key, default):

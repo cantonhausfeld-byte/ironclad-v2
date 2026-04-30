@@ -22,6 +22,11 @@ _EFFICIENCY_PRIORS = {
 _DEFAULT_EFF = {"catch_rate": 0.65, "yds_per_tgt": 8.0, "yds_per_carry": 4.2, "td_rate_tgt": 0.05, "td_rate_carry": 0.04}
 _DEF_EPA_SCALE = 0.02
 
+
+def _to_xgb(df: pd.DataFrame) -> pd.DataFrame:
+    return df.apply(pd.to_numeric, errors="coerce").fillna(0)
+
+
 FEATURES = [
     "catch_rate_l4", "yards_per_target_l4", "yards_per_carry_l4",
     "yac_per_rec_l4", "td_rate_per_target_l4", "td_rate_per_carry_l4",
@@ -57,7 +62,7 @@ class PlayerEfficiencyModel(BaseModel):
             mask_pos = X["position"] == pos
             if mask_pos.sum() < 20:
                 continue
-            Xp = X[mask_pos][feat_cols].fillna(0)
+            Xp = _to_xgb(X[mask_pos][feat_cols])
             self._regs[pos] = {}
             for out_key, tgt_col in target_map.items():
                 if tgt_col not in y.columns:
@@ -84,7 +89,7 @@ class PlayerEfficiencyModel(BaseModel):
 
     def _predict_trained(self, X: pd.DataFrame, pos: str) -> dict:
         feat_cols = [c for c in FEATURES if c in X.columns]
-        Xm = X[feat_cols].fillna(0)
+        Xm = _to_xgb(X[feat_cols])
         regs = self._regs[pos]
         priors = _EFFICIENCY_PRIORS.get(pos, _DEFAULT_EFF)
 
