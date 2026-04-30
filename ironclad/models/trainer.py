@@ -62,7 +62,7 @@ class ModelTrainer:
 
     def train_score_env(self, train_seasons: list[int]) -> dict[str, Any]:
         logger.info("Training ScoreEnvironmentModel on seasons %s", train_seasons)
-        X_train, y_train = self._load_team_data(train_seasons, for_score_env=True)
+        X_train, y_train = self._load_team_data_flat(train_seasons)
         if X_train.empty:
             return {}
 
@@ -114,7 +114,6 @@ class ModelTrainer:
     def _load_team_data(
         self,
         seasons: list[int],
-        for_score_env: bool = False,
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
         s = ", ".join(str(s) for s in seasons)
 
@@ -155,24 +154,25 @@ class ModelTrainer:
         """).df()
 
         X = merged.merge(games, on="game_id", how="inner")
-
-        y_cols = ["home_win", "home_margin", "total_score"]
-        if for_score_env:
-            # Flatten home-side score-env targets into plain columns
-            for src, dst in [
-                ("home_target_pass_rate",     "target_pass_rate"),
-                ("home_target_points_scored", "target_points_scored"),
-                ("home_target_yards_total",   "target_yards_total"),
-            ]:
-                X[dst] = X[src] if src in X.columns else None
-            X["target_plays_total"] = None
-            X["target_sack_rate"] = None
-
-        extra = [c for c in ["target_pass_rate", "target_points_scored",
-                              "target_yards_total", "target_plays_total",
-                              "target_sack_rate"] if c in X.columns]
-        y_df = X[y_cols + extra].copy()
+        y_df = X[["home_win", "home_margin", "total_score"]].copy()
         return X, y_df
+
+    def _load_team_data_flat(self, seasons: list[int]) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """One row per team-game with original (unprefixed) column names; for score_env."""
+        s = ", ".join(str(s) for s in seasons)
+        df = self._conn.execute(f"""
+            SELECT * FROM gold.team_game_features
+            WHERE season IN ({s}) AND target_points_scored IS NOT NULL
+        """).df()
+        if df.empty:
+            return pd.DataFrame(), pd.DataFrame()
+        df["target_plays_total"] = None
+        df["target_sack_rate"] = None
+        y_cols = [c for c in [
+            "target_pass_rate", "target_points_scored", "target_yards_total",
+            "target_plays_total", "target_sack_rate",
+        ] if c in df.columns]
+        return df, df[y_cols].copy()
 
     def _load_player_data(
         self,
