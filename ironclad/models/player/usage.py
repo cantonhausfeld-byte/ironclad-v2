@@ -102,10 +102,27 @@ class PlayerUsageModel(BaseModel):
             return max(0.0, float(regs[key].predict(Xm)[0]))
 
         priors = _POSITION_PRIORS.get(pos, _DEFAULT_PRIOR)
+        targets  = pred("targets",       priors["targets"])
+        carries  = pred("carries",       priors["carries"])
+        pass_att = pred("pass_attempts", priors["pass_attempts"])
+
+        # Zero out fringe roster players: no historical share AND no known depth slot.
+        # Without this guard the model's learned intercept gives non-zero volume to
+        # every supplemental roster player, diluting starters via the reconciler.
+        carry_share  = _col(X, "carry_share_l4",  None)
+        target_share = _col(X, "target_share_l4", None)
+        depth = _col(X, "depth_team", None)
+        has_history    = (carry_share  is not None and carry_share  > 0.005) or \
+                         (target_share is not None and target_share > 0.005)
+        starter_proxy  = depth is not None and depth <= 2
+        if not has_history and not starter_proxy:
+            carries = 0.0
+            targets = 0.0
+
         return {
-            "targets_projected":       pred("targets",       priors["targets"]),
-            "carries_projected":       pred("carries",       priors["carries"]),
-            "pass_attempts_projected": pred("pass_attempts", priors["pass_attempts"]),
+            "targets_projected":       targets,
+            "carries_projected":       carries,
+            "pass_attempts_projected": pass_att,
             "availability": availability,
         }
 
@@ -116,8 +133,13 @@ class PlayerUsageModel(BaseModel):
         target_share = _col(X, "target_share_l4", None)
         carry_share = _col(X, "carry_share_l4", None)
 
-        targets = (target_share * 32.0 * volume_scale) if target_share else (priors["targets"] * volume_scale)
-        carries = (carry_share * 25.0 * volume_scale) if carry_share else (priors["carries"] * volume_scale)
+        # Only grant position-prior volume to players with a known starter slot;
+        # fringe players with no share data get zero projected volume.
+        depth = _col(X, "depth_team", None)
+        starter_proxy = depth is not None and depth <= 2
+
+        targets = (target_share * 32.0 * volume_scale) if target_share else (priors["targets"] * volume_scale if starter_proxy else 0.0)
+        carries = (carry_share * 25.0 * volume_scale) if carry_share else (priors["carries"] * volume_scale if starter_proxy else 0.0)
         pass_att = priors.get("pass_attempts", 0.0) * volume_scale
 
         return {

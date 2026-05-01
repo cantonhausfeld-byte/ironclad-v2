@@ -37,7 +37,7 @@ class GameDraw:
         total = float(truncated_normal(
             rng,
             mean=home_outcome["total_mean"],
-            std=home_outcome["total_std"],
+            std=max(home_outcome["total_std"], home_outcome["total_mean"] * 0.12),
             low=0.0, high=90.0,
         )[0])
         margin = float(rng.normal(home_outcome["home_margin_mean"], home_outcome["home_margin_std"]))
@@ -65,8 +65,11 @@ class GameDraw:
         away_rush_att = away_plays - away_pass_att
 
         # ── Yardage ───────────────────────────────────────────────────────────
-        home_pass_yards = max(0.0, float(rng.normal(home_score * 6.0, 40.0)))
-        away_pass_yards = max(0.0, float(rng.normal(away_score * 6.0, 40.0)))
+        # Pass yards from attempts × NFL avg yards/attempt (7.2); far better
+        # than score × 6 which underestimates low-scoring games and has no
+        # relationship to actual passing volume drawn above.
+        home_pass_yards = max(0.0, float(rng.normal(home_pass_att * 7.2, home_pass_att * 2.5)))
+        away_pass_yards = max(0.0, float(rng.normal(away_pass_att * 7.2, away_pass_att * 2.5)))
         home_rush_yards = max(0.0, float(rng.normal(home_rush_att * 4.3, 25.0)))
         away_rush_yards = max(0.0, float(rng.normal(away_rush_att * 4.3, 25.0)))
 

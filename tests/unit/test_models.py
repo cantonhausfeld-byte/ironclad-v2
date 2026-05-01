@@ -28,6 +28,7 @@ def _team_row(home_win_prob=0.58, total=47.5, spread=-3.0):
 def _player_row(pos="WR", avail=1.0):
     return pd.DataFrame([{
         "position": pos, "availability": avail,
+        "depth_team": 1,
         "target_share_l4": 0.18, "carry_share_l4": 0.0,
         "catch_rate_l4": 0.65, "yards_per_target_l4": 8.2,
         "yards_per_carry_l4": 4.2,

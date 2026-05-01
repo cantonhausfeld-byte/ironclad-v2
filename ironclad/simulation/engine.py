@@ -132,7 +132,7 @@ class MonteCarloEngine:
 
 
 def _allocate_qb_pass_volume(contexts: list[PlayerContext]) -> list[PlayerContext]:
-    """Give all pass volume to the primary QB; backup QBs get zero pass attempts."""
+    """Give all pass and rush volume to the primary QB; backups get zero."""
     qbs = [ctx for ctx in contexts if ctx.position == "QB"]
     if len(qbs) <= 1:
         return contexts
@@ -140,6 +140,7 @@ def _allocate_qb_pass_volume(contexts: list[PlayerContext]) -> list[PlayerContex
     for ctx in qbs:
         if ctx is not primary:
             ctx.pass_attempts_projected = 0.0
+            ctx.carries_projected = 0.0
     return contexts
 
 
