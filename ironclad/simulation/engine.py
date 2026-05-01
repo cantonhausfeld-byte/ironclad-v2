@@ -128,7 +128,23 @@ class MonteCarloEngine:
             contexts.append(ctx)
 
         contexts = _allocate_qb_pass_volume(contexts)
+        contexts = _allocate_rb_rush_volume(contexts)
         return contexts
+
+
+def _allocate_rb_rush_volume(contexts: list[PlayerContext]) -> list[PlayerContext]:
+    """Zero carries for RBs ranked 5th or lower by projected carries.
+
+    Supplemental roster RBs with historical carry share from prior roles
+    dilute starter yards through the reconciler scale factor.
+    """
+    rbs = [ctx for ctx in contexts if ctx.position in ("RB", "FB")]
+    if len(rbs) <= 4:
+        return contexts
+    rbs.sort(key=lambda c: c.carries_projected, reverse=True)
+    for ctx in rbs[4:]:
+        ctx.carries_projected = 0.0
+    return contexts
 
 
 def _allocate_qb_pass_volume(contexts: list[PlayerContext]) -> list[PlayerContext]:
