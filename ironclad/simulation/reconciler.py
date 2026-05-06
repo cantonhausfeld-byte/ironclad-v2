@@ -40,13 +40,15 @@ class Reconciler:
     ) -> list[PlayerDrawResult]:
         players = [p for p in players]  # copy list
 
-        # ── Yard scaling ──────────────────────────────────────────────────────
+        # ── Yard + volume scaling ─────────────────────────────────────────────
         total_rec = sum(p.rec_yards for p in players)
         if total_rec > 0:
             scale = team_pass_yards / total_rec
             scale = max(0.3, min(3.0, scale))
             for p in players:
                 p.rec_yards = max(0.0, p.rec_yards * scale)
+                p.targets = max(0, round(p.targets * scale))
+                p.receptions = max(0, min(p.targets, round(p.receptions * scale)))
 
         # QB pass_yards = total receiving yards (same yardage pool, now reconciled)
         total_rec_after = sum(p.rec_yards for p in players)
@@ -60,6 +62,7 @@ class Reconciler:
             scale = max(0.3, min(3.0, scale))
             for p in players:
                 p.rush_yards = max(0.0, p.rush_yards * scale)
+                p.carries = max(0, round(p.carries * scale))
 
         # ── TD distribution ───────────────────────────────────────────────────
         # Estimate team TDs from score (rough: subtract 3 FGs worth, rest are TDs)
