@@ -93,14 +93,14 @@ class PlayerEfficiencyModel(BaseModel):
         if pos == "QB":
             return self._predict_stub(X, pos)
 
-        feat_cols = [c for c in FEATURES if c in X.columns]
-        Xm = _to_xgb(X[feat_cols])
         regs = self._regs[pos]
         priors = _EFFICIENCY_PRIORS.get(pos, _DEFAULT_EFF)
 
         def pred(key, default, lo=0.0, hi=None):
             if key not in regs:
                 return default
+            train_cols = list(regs[key].feature_names_in_)
+            Xm = _to_xgb(X.reindex(columns=train_cols, fill_value=0.0))
             val = float(regs[key].predict(Xm)[0])
             val = max(lo, val)
             if hi is not None:

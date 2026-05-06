@@ -63,8 +63,10 @@ class ScoreEnvironmentModel(BaseModel):
         return self._predict_stub(X)
 
     def _predict_trained(self, X: pd.DataFrame) -> dict:
-        feat_cols = [c for c in FEATURES if c in X.columns]
-        Xm = X[feat_cols].fillna(0)
+        # Use the model's own feature list so we never pass columns the trained
+        # booster doesn't know about (FEATURES may have grown since training).
+        train_cols = list(self._reg_pass_rate.feature_names_in_)
+        Xm = X.reindex(columns=train_cols, fill_value=0.0).fillna(0.0).astype(float)
 
         def pred(reg, default):
             if reg is None:
