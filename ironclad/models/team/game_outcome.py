@@ -132,7 +132,12 @@ class GameOutcomeModel(BaseModel):
         raw_prob = float(self._clf.predict_proba(Xm)[0, 1])
         home_win_prob = float(self._calibrator.transform(np.array([raw_prob]))[0])
         home_margin_mean = float(self._reg_margin.predict(Xm)[0])
-        total_mean = float(self._reg_total.predict(Xm)[0])
+        total_mean_model = float(self._reg_total.predict(Xm)[0])
+        # Blend model prediction with Vegas-implied total (60/40).
+        # NFL closing totals are highly efficient; anchoring to the market
+        # corrects the model's regression-to-mean bias (~3-4 pt underestimation).
+        vegas_total = _col(X, "implied_total_from_odds", total_mean_model)
+        total_mean = 0.4 * total_mean_model + 0.6 * vegas_total
 
         return {
             "home_win_prob": np.clip(home_win_prob, 0.02, 0.98),
