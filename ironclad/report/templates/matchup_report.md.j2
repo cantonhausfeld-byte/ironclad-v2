@@ -40,9 +40,9 @@
 
 ### Passing
 {% if home_qb %}
-| Player | Pass Att | Comp | Pass Yds | TDs |
-|---|---|---|---|---|
-{% for p in home_qb %}| {{ p.player_name }} | {{ p.pass_attempts }} ({{ p.pass_attempts_range }}) | {{ p.completions }} ({{ p.completions_range }}) | {{ p.pass_yards }} ({{ p.pass_yards_range }}) | {{ p.tds }} ({{ p.tds_range }}) |
+| Player | Pass Att | Comp | Pass Yds | Carries | Rush Yds | TDs |
+|---|---|---|---|---|---|---|
+{% for p in home_qb %}| {{ p.player_name }} | {{ p.pass_attempts }} ({{ p.pass_attempts_range }}) | {{ p.completions }} ({{ p.completions_range }}) | {{ p.pass_yards }} ({{ p.pass_yards_range }}) | {% if p.carries != '—' and p.carries > 0 %}{{ p.carries }} ({{ p.carries_range }}){% else %}—{% endif %} | {% if p.rush_yards != '—' and p.rush_yards > 0 %}{{ p.rush_yards }} ({{ p.rush_yards_range }}){% else %}—{% endif %} | {{ p.tds }} ({{ p.tds_range }}) |
 {% endfor %}
 {% else %}
 *No QB projections available*
@@ -74,9 +74,9 @@
 
 ### Passing
 {% if away_qb %}
-| Player | Pass Att | Comp | Pass Yds | TDs |
-|---|---|---|---|---|
-{% for p in away_qb %}| {{ p.player_name }} | {{ p.pass_attempts }} ({{ p.pass_attempts_range }}) | {{ p.completions }} ({{ p.completions_range }}) | {{ p.pass_yards }} ({{ p.pass_yards_range }}) | {{ p.tds }} ({{ p.tds_range }}) |
+| Player | Pass Att | Comp | Pass Yds | Carries | Rush Yds | TDs |
+|---|---|---|---|---|---|---|
+{% for p in away_qb %}| {{ p.player_name }} | {{ p.pass_attempts }} ({{ p.pass_attempts_range }}) | {{ p.completions }} ({{ p.completions_range }}) | {{ p.pass_yards }} ({{ p.pass_yards_range }}) | {% if p.carries != '—' and p.carries > 0 %}{{ p.carries }} ({{ p.carries_range }}){% else %}—{% endif %} | {% if p.rush_yards != '—' and p.rush_yards > 0 %}{{ p.rush_yards }} ({{ p.rush_yards_range }}){% else %}—{% endif %} | {{ p.tds }} ({{ p.tds_range }}) |
 {% endfor %}
 {% else %}
 *No QB projections available*

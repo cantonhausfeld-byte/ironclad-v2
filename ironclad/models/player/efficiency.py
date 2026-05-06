@@ -138,8 +138,13 @@ class PlayerEfficiencyModel(BaseModel):
         catch_rate = col("catch_rate_l4") or priors["catch_rate"]
         yds_per_tgt = col("yards_per_target_l4") or priors["yds_per_tgt"]
         yds_per_carry = col("yards_per_carry_l4") or priors["yds_per_carry"]
-        td_rate_tgt = col("td_rate_per_target_l4") or priors["td_rate_tgt"]
-        td_rate_carry = col("td_rate_per_carry_l4") or priors["td_rate_carry"]
+        # QBs: td_rate_per_target_l4 is a receiving stat (meaningless for passers);
+        # always use the QB prior so small-sample outliers don't skew TD distribution.
+        if pos == "QB":
+            td_rate_tgt = priors["td_rate_tgt"]
+        else:
+            td_rate_tgt = col("td_rate_per_target_l4") or priors["td_rate_tgt"]
+        td_rate_carry = min(col("td_rate_per_carry_l4") or priors["td_rate_carry"], 0.10)
 
         if catch_rate is not None:
             catch_rate = max(0.1, min(1.0, catch_rate * eff_adj))

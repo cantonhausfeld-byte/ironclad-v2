@@ -123,13 +123,14 @@ class PlayerFeatureBuilder:
         td_per_tgt = total_tds_avg / (targets_avg + eps) if targets_avg > 0 else None
         td_per_carry = total_tds_avg / (carries_avg + eps) if carries_avg > 0 else None
 
-        # Clamp rates to valid range
+        # Clamp rates to valid range; 0.5 cap is too permissive for small samples
+        # (e.g. a QB with 2 targets and 1 TD scores a 0.50 rate, destroying TD dist)
         if catch_rate is not None:
             catch_rate = max(0.0, min(1.0, catch_rate))
         if td_per_tgt is not None:
-            td_per_tgt = max(0.0, min(0.5, td_per_tgt))
+            td_per_tgt = max(0.0, min(0.20, td_per_tgt))
         if td_per_carry is not None:
-            td_per_carry = max(0.0, min(0.5, td_per_carry))
+            td_per_carry = max(0.0, min(0.15, td_per_carry))
 
         def opp_feat(col, default=None):
             if opp_feats.empty or col not in opp_feats.columns:
