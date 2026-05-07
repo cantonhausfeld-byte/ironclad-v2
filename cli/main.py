@@ -160,6 +160,60 @@ def train(train_seasons, val_seasons, model) -> None:
         click.echo(f"  {name}: {m}")
 
 
+# ── backtest ──────────────────────────────────────────────────────────────────
+
+@cli.command()
+@click.option("--train-start", default=2016, show_default=True, type=int,
+              help="First season of training data (expanding window starts here)")
+@click.option("--test-seasons", default="2018-2024",
+              help="Seasons to predict (range or comma-separated, e.g. '2018-2024')")
+@click.option("--run-id", default=None,
+              help="Optional custom run identifier")
+def backtest(train_start, test_seasons, run_id) -> None:
+    """Walk-forward backtest: train on [train_start..T-1], predict season T for each T."""
+    test_list = _parse_seasons(test_seasons)
+    if not test_list:
+        click.echo("ERROR: Could not parse --test-seasons", err=True)
+        import sys; sys.exit(1)
+
+    click.echo(f"Walk-forward backtest | train_start={train_start} | test={test_list}")
+    click.echo("Training a fresh model for each fold — this may take several minutes...")
+
+    from ironclad.eval.backtester import Backtester
+    bt = Backtester()
+    preds = bt.run(train_start=train_start, test_seasons=test_list, run_id=run_id)
+
+    if preds.empty:
+        click.echo("No predictions generated. Check that gold.team_game_features is populated.")
+        return
+
+    click.echo(f"\nBacktest complete: {len(preds)} game predictions stored.")
+    click.echo("Run 'ironclad dashboard' to view results.")
+
+
+# ── dashboard ─────────────────────────────────────────────────────────────────
+
+@cli.command()
+@click.option("--run-id", default=None,
+              help="Specific backtest run ID (default: most recent)")
+def dashboard(run_id) -> None:
+    """Display backtest metrics dashboard from the most recent backtest run."""
+    from ironclad.eval.backtester import Backtester
+    from ironclad.eval.dashboard import print_dashboard
+
+    bt = Backtester()
+    if run_id:
+        preds = bt.load_run(run_id)
+    else:
+        preds = bt.load_latest()
+
+    if preds.empty:
+        click.echo("No backtest results found. Run: ironclad backtest")
+        return
+
+    print_dashboard(preds)
+
+
 # ── evaluate ──────────────────────────────────────────────────────────────────
 
 @cli.command()
