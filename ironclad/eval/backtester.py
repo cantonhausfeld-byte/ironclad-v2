@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 import numpy as np
 import pandas as pd
 
-from ironclad.models.team.game_outcome import GameOutcomeModel, _build_diff_features, TEAM_FEATURES
+from ironclad.models.team.game_outcome import CLF_FEATURES, GameOutcomeModel, _build_diff_features, TEAM_FEATURES
 from ironclad.models.trainer import ModelTrainer
 from ironclad.store.connection import get_connection
 
@@ -137,17 +137,24 @@ class Backtester:
         model = GameOutcomeModel()
         model.fit(X_train, y_train)
 
-        # ── Calibration: last 4 weeks of final training season ──
+        # ── Calibration ──
+        # Use the full last training season (~267 games) for Platt scaling.
+        # Platt scaling (logistic regression on logits) is robust with ~267 samples;
+        # isotonic overfits on small calibration sets and produces step-function behavior.
         last_season = max(train_seasons)
-        X_last, y_last = trainer._load_team_data([last_season])
-        if not X_last.empty and "home_week" in X_last.columns:
-            max_week = int(X_last["home_week"].max())
-            cal_mask = X_last["home_week"] >= max_week - 3
-            if cal_mask.sum() >= 8:
+        X_cal, y_cal = trainer._load_team_data([last_season])
+        if not X_cal.empty and len(X_cal) >= 30:
+            Xf_cal = _build_diff_features(X_cal)
+            feat_cols_cal = [c for c in CLF_FEATURES if c in Xf_cal.columns]
+            if feat_cols_cal and model._clf is not None:
+                Xm_cal = Xf_cal[feat_cols_cal].fillna(0.0)
+                raw_cal_probs = model._clf.predict_proba(Xm_cal)[:, 1]
+                y_cal_arr = y_cal["home_win"].astype(int).to_numpy()
                 try:
-                    model.calibrate(X_last[cal_mask], y_last[cal_mask])
+                    model.calibrate_from_probs(raw_cal_probs, y_cal_arr)
+                    logger.info("Fold %d: Platt calibration fitted on %d games", test_season, len(raw_cal_probs))
                 except Exception as e:
-                    logger.warning("Calibration failed for fold %d: %s", test_season, e)
+                    logger.warning("Platt calibration failed for fold %d: %s", test_season, e)
 
         # ── Test data ──
         X_test, y_test = trainer._load_team_data([test_season])
@@ -156,19 +163,27 @@ class Backtester:
 
         # ── Batch prediction ──
         Xf = _build_diff_features(X_test)
-        feat_cols = [c for c in TEAM_FEATURES if c in Xf.columns]
-        if not feat_cols:
-            logger.warning("No TEAM_FEATURES found in fold %d", test_season)
+        clf_cols = [c for c in CLF_FEATURES if c in Xf.columns]
+        reg_cols = [c for c in TEAM_FEATURES if c in Xf.columns]
+        if not clf_cols:
+            logger.warning("No CLF_FEATURES found in fold %d", test_season)
             return []
-        Xm = Xf[feat_cols].fillna(0.0)
+        Xm_clf = Xf[clf_cols].fillna(0.0)
+        Xm_reg = Xf[reg_cols].fillna(0.0)
 
         if model._clf is None:
             return []
 
-        raw_probs = model._clf.predict_proba(Xm)[:, 1]
-        home_win_probs = np.clip(model._calibrator.transform(raw_probs), 0.02, 0.98)
-        margin_preds = model._reg_margin.predict(Xm)
-        total_preds_raw = model._reg_total.predict(Xm)
+        raw_probs = model._clf.predict_proba(Xm_clf)[:, 1]
+        platt_probs = np.clip(model._calibrator.transform(raw_probs), 0.02, 0.98)
+        margin_preds = model._reg_margin.predict(Xm_reg)
+        total_preds_raw = model._reg_total.predict(Xm_reg)
+
+        # Pre-compute Vegas win probs for blending (row-wise below)
+        vegas_win_probs = np.array([
+            _fval(X_test.iloc[i], "home_home_win_prob_from_odds")
+            for i in range(len(X_test))
+        ])
 
         now_ts = datetime.now(timezone.utc).isoformat()
         rows: list[dict] = []
@@ -176,6 +191,16 @@ class Backtester:
         for i in range(len(X_test)):
             xrow = X_test.iloc[i]
             yrow = y_test.iloc[i]
+
+            # Blend model win prob 50/50 with Vegas-implied win prob when available.
+            # XGBoost is still overconfident at extreme spreads; anchoring to the
+            # efficient market reduces systematic error for heavy favorites/underdogs.
+            vwp = vegas_win_probs[i]
+            model_wp = float(platt_probs[i])
+            if vwp is not None:
+                home_win_prob_final = np.clip(0.5 * model_wp + 0.5 * float(vwp), 0.02, 0.98)
+            else:
+                home_win_prob_final = model_wp
 
             vegas_total = _fval(xrow, "home_implied_total_from_odds")
             raw_total = float(total_preds_raw[i])
@@ -194,7 +219,7 @@ class Backtester:
                 "model_name":         "game_outcome",
                 "model_version":      f"fold_{test_season}",
                 "predicted_at":       now_ts,
-                "home_win_prob":      round(float(home_win_probs[i]), 4),
+                "home_win_prob":      round(home_win_prob_final, 4),
                 "home_win_prob_vegas": _fval(xrow, "home_home_win_prob_from_odds"),
                 "home_margin_pred":   round(float(margin_preds[i]), 2),
                 "total_pred":         round(blended_total, 2),
