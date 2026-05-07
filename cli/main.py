@@ -169,18 +169,26 @@ def train(train_seasons, val_seasons, model) -> None:
               help="Seasons to predict (range or comma-separated, e.g. '2018-2024')")
 @click.option("--run-id", default=None,
               help="Optional custom run identifier")
-def backtest(train_start, test_seasons, run_id) -> None:
+@click.option("--model", "model_name", default="xgb",
+              type=click.Choice(["xgb", "lgbm"]), show_default=True,
+              help="Model class: xgb (XGBoost) or lgbm (LightGBM+Optuna)")
+def backtest(train_start, test_seasons, run_id, model_name) -> None:
     """Walk-forward backtest: train on [train_start..T-1], predict season T for each T."""
     test_list = _parse_seasons(test_seasons)
     if not test_list:
         click.echo("ERROR: Could not parse --test-seasons", err=True)
         import sys; sys.exit(1)
 
-    click.echo(f"Walk-forward backtest | train_start={train_start} | test={test_list}")
+    click.echo(f"Walk-forward backtest | train_start={train_start} | test={test_list} | model={model_name}")
     click.echo("Training a fresh model for each fold — this may take several minutes...")
 
     from ironclad.eval.backtester import Backtester
-    bt = Backtester()
+    if model_name == "lgbm":
+        from ironclad.models.team.game_outcome_lgbm import GameOutcomeLGBM
+        model_class = GameOutcomeLGBM
+    else:
+        model_class = None  # Backtester defaults to GameOutcomeModel
+    bt = Backtester(model_class=model_class)
     preds = bt.run(train_start=train_start, test_seasons=test_list, run_id=run_id)
 
     if preds.empty:

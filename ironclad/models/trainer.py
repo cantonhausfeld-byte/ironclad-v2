@@ -37,14 +37,20 @@ class ModelTrainer:
         self,
         train_seasons: list[int],
         val_seasons: list[int] | None = None,
+        use_lgbm: bool = False,
     ) -> dict[str, Any]:
-        logger.info("Training GameOutcomeModel on seasons %s", train_seasons)
+        if use_lgbm:
+            from ironclad.models.team.game_outcome_lgbm import GameOutcomeLGBM
+            model_cls = GameOutcomeLGBM
+        else:
+            model_cls = GameOutcomeModel
+        logger.info("Training %s on seasons %s", model_cls.__name__, train_seasons)
         X_train, y_train = self._load_team_data(train_seasons)
         if X_train.empty:
             logger.warning("No team feature data found for %s", train_seasons)
             return {}
 
-        model = GameOutcomeModel()
+        model = model_cls()
         model.fit(X_train, y_train)
 
         metrics: dict[str, Any] = {"train_rows": len(X_train)}

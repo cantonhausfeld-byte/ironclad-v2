@@ -24,8 +24,9 @@ class Backtester:
     persists results to gold.backtest_predictions.
     """
 
-    def __init__(self, conn=None) -> None:
+    def __init__(self, conn=None, model_class=None) -> None:
         self._conn = conn or get_connection()
+        self._model_class = model_class if model_class is not None else GameOutcomeModel
 
     def run(
         self,
@@ -134,7 +135,7 @@ class Backtester:
             logger.warning("No training data for %s", train_seasons)
             return []
 
-        model = GameOutcomeModel()
+        model = self._model_class()
         model.fit(X_train, y_train)
 
         # ── Calibration ──
@@ -216,7 +217,7 @@ class Backtester:
                 "week":               int(xrow.get("home_week", 0)),
                 "home_team":          str(xrow.get("home_team", "")),
                 "away_team":          str(xrow.get("away_team", "")),
-                "model_name":         "game_outcome",
+                "model_name":         model.name,
                 "model_version":      f"fold_{test_season}",
                 "predicted_at":       now_ts,
                 "home_win_prob":      round(home_win_prob_final, 4),
