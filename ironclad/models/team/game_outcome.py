@@ -40,6 +40,13 @@ TEAM_FEATURES = [
     "pass_rate_diff",
     "success_rate_diff",
     "points_pg_diff",
+    # Phase 2A: situational features
+    "cpoe_diff",
+    "neutral_epa_diff",
+    "epa_pass_early_diff",
+    "epa_rush_early_diff",
+    "epa_third_down_diff",
+    "third_down_pct_diff",
     "home_rest_days",
     "away_rest_days",
     "rest_advantage",
@@ -199,6 +206,13 @@ def _build_diff_features(X: pd.DataFrame) -> pd.DataFrame:
         ("pass_rate_diff",      "off_pass_rate_l4",        None),
         ("success_rate_diff",   "off_success_rate_l4",     None),
         ("points_pg_diff",      "off_points_per_game_l4",  None),
+        # Phase 2A: situational features
+        ("cpoe_diff",           "off_cpoe_l4",             None),
+        ("neutral_epa_diff",    "off_neutral_epa_l4",      None),
+        ("epa_pass_early_diff", "off_epa_pass_early_l4",   None),
+        ("epa_rush_early_diff", "off_epa_rush_early_l4",   None),
+        ("epa_third_down_diff", "off_epa_third_down_l4",   None),
+        ("third_down_pct_diff", "off_third_down_pct_l4",   None),
     ]
     # If input has home_ / away_ prefix form (from training loader):
     for diff_col, feat_col, _ in pairs:

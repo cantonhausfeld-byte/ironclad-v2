@@ -124,7 +124,19 @@ class SilverTransformer:
                 -- Pressure proxy: sack rate
                 CASE WHEN SUM(pass_attempt) > 0
                      THEN SUM(sack)::FLOAT / SUM(pass_attempt)
-                     ELSE NULL END                             AS sack_rate
+                     ELSE NULL END                             AS sack_rate,
+                -- Phase 2A: CPOE, xpass, situational EPA, third/fourth down
+                AVG(cpoe)                                      AS avg_cpoe,
+                AVG(xpass)                                     AS avg_xpass,
+                SUM(qb_hit)                                    AS qb_hits,
+                AVG(CASE WHEN ABS(score_differential) <= 7 THEN epa END)           AS epa_neutral_script,
+                AVG(CASE WHEN down IN (1,2) AND pass_attempt=1 THEN epa END)       AS epa_pass_early_down,
+                AVG(CASE WHEN down IN (1,2) AND rush_attempt=1 THEN epa END)       AS epa_rush_early_down,
+                AVG(CASE WHEN down=3 THEN epa END)                                 AS epa_third_down,
+                AVG(CASE WHEN yardline_100 <= 20 THEN epa END)                     AS epa_rz,
+                CAST(SUM(third_down_converted) AS FLOAT)
+                  / NULLIF(SUM(third_down_converted + third_down_failed), 0)       AS third_down_pct,
+                CAST(SUM(fourth_down_converted + fourth_down_failed) AS INTEGER)   AS fourth_down_attempts
             FROM bronze.play_by_play
             WHERE posteam IS NOT NULL
               AND play_type IN ('pass','run','qb_kneel','qb_spike')

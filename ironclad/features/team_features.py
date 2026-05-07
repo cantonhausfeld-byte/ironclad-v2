@@ -148,6 +148,27 @@ class TeamFeatureBuilder:
             "def_success_rate_l4":    def_from_opp("success_rate",  "success_rate"),
             "def_points_allowed_l4":  off("points_allowed",         "points_per_game"),
             "def_sack_rate_l4":       off_sack_rate,
+            # Phase 2A: CPOE
+            "off_cpoe_l4":            off("avg_cpoe",            default=0.0),
+            "def_cpoe_allowed_l4":    def_from_opp("avg_cpoe",   default=0.0),
+            # Phase 2A: neutral-script EPA (garbage-time free)
+            "off_neutral_epa_l4":     off("epa_neutral_script",  "off_epa_per_play"),
+            "def_neutral_epa_l4":     def_from_opp("epa_neutral_script", "def_epa_per_play"),
+            # Phase 2A: early-down EPA splits
+            "off_epa_pass_early_l4":  off("epa_pass_early_down", "off_epa_per_play"),
+            "def_epa_pass_early_l4":  def_from_opp("epa_pass_early_down", "def_epa_per_play"),
+            "off_epa_rush_early_l4":  off("epa_rush_early_down", "off_epa_per_play"),
+            "def_epa_rush_early_l4":  def_from_opp("epa_rush_early_down", "def_epa_per_play"),
+            # Phase 2A: situational EPA
+            "off_epa_third_down_l4":  off("epa_third_down",      "off_epa_per_play"),
+            "def_epa_third_down_l4":  def_from_opp("epa_third_down",  "def_epa_per_play"),
+            "off_epa_rz_l4":          off("epa_rz",              "off_epa_per_play"),
+            "def_epa_rz_l4":          def_from_opp("epa_rz",     "def_epa_per_play"),
+            # Phase 2A: third-down efficiency
+            "off_third_down_pct_l4":  off("third_down_pct",      default=0.40),
+            "def_third_down_pct_l4":  def_from_opp("third_down_pct", default=0.40),
+            # Phase 2A: fourth-down aggressiveness
+            "off_fourth_down_att_l4": off("fourth_down_attempts", default=0.0),
             # Season-to-date
             "off_epa_per_play_std":   std("epa_per_play",   "off_epa_per_play"),
             "def_epa_per_play_std":   def_from_opp("epa_per_play",  "def_epa_per_play"),

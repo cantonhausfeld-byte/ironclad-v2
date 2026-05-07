@@ -24,6 +24,15 @@ _KEEP = [
     "passer_player_id", "passer_player_name",
     "receiver_player_id", "receiver_player_name",
     "rusher_player_id", "rusher_player_name",
+    # Phase 2A additions — situational features
+    "cpoe",                  # Completion % over expectation (QB quality signal)
+    "xpass",                 # Expected pass probability (coach tendency vs situation)
+    "score_differential",    # Current score margin (needed for neutral-script EPA filter)
+    "qb_hit",                # QB was hit on the play (pressure proxy)
+    "third_down_converted",  # Converted 3rd down
+    "third_down_failed",     # Failed 3rd down
+    "fourth_down_converted", # Converted 4th down go-for-it
+    "fourth_down_failed",    # Failed 4th down go-for-it
 ]
 
 

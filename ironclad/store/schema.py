@@ -80,6 +80,15 @@ def _bronze(conn: duckdb.DuckDBPyConnection) -> None:
         receiver_player_name   VARCHAR,
         rusher_player_id       VARCHAR,
         rusher_player_name     VARCHAR,
+        -- Phase 2A additions
+        cpoe                   FLOAT,
+        xpass                  FLOAT,
+        score_differential     INTEGER,
+        qb_hit                 INTEGER DEFAULT 0,
+        third_down_converted   INTEGER DEFAULT 0,
+        third_down_failed      INTEGER DEFAULT 0,
+        fourth_down_converted  INTEGER DEFAULT 0,
+        fourth_down_failed     INTEGER DEFAULT 0,
         _ingest_ts             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         PRIMARY KEY (game_id, play_id)
     )
@@ -304,6 +313,17 @@ def _silver(conn: duckdb.DuckDBPyConnection) -> None:
         total_air_yards  FLOAT,
         -- Pressure proxy
         sack_rate        FLOAT,
+        -- Phase 2A additions
+        avg_cpoe              FLOAT,
+        avg_xpass             FLOAT,
+        qb_hits               INTEGER,
+        epa_neutral_script    FLOAT,
+        epa_pass_early_down   FLOAT,
+        epa_rush_early_down   FLOAT,
+        epa_third_down        FLOAT,
+        epa_rz                FLOAT,
+        third_down_pct        FLOAT,
+        fourth_down_attempts  INTEGER,
         _silver_ts       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         PRIMARY KEY (game_id, team)
     )
@@ -390,6 +410,22 @@ def _gold(conn: duckdb.DuckDBPyConnection) -> None:
         def_success_rate_l4      FLOAT,
         def_points_allowed_l4    FLOAT,
         def_sack_rate_l4         FLOAT,
+        -- Phase 2A rolling L4 additions
+        off_cpoe_l4              FLOAT,
+        def_cpoe_allowed_l4      FLOAT,
+        off_neutral_epa_l4       FLOAT,
+        def_neutral_epa_l4       FLOAT,
+        off_epa_pass_early_l4    FLOAT,
+        def_epa_pass_early_l4    FLOAT,
+        off_epa_rush_early_l4    FLOAT,
+        def_epa_rush_early_l4    FLOAT,
+        off_epa_third_down_l4    FLOAT,
+        def_epa_third_down_l4    FLOAT,
+        off_epa_rz_l4            FLOAT,
+        def_epa_rz_l4            FLOAT,
+        off_third_down_pct_l4    FLOAT,
+        def_third_down_pct_l4    FLOAT,
+        off_fourth_down_att_l4   FLOAT,
         -- Season-to-date
         off_epa_per_play_std     FLOAT,
         def_epa_per_play_std     FLOAT,
@@ -448,6 +484,7 @@ def _gold(conn: duckdb.DuckDBPyConnection) -> None:
         yac_per_rec_l4           FLOAT,
         td_rate_per_target_l4    FLOAT,
         td_rate_per_carry_l4     FLOAT,
+        adot_l4                  FLOAT,
         -- Opponent defense
         opp_def_pass_epa_l4      FLOAT,
         opp_def_rush_epa_l4      FLOAT,
@@ -513,8 +550,28 @@ def _gold(conn: duckdb.DuckDBPyConnection) -> None:
 # ALTER TABLE ADD COLUMN IF NOT EXISTS.  Bronze tables are append-only and
 # never need migration.
 _EXPECTED_COLS: dict[str, list[tuple[str, str]]] = {
+    "bronze.play_by_play": [
+        ("cpoe",                 "FLOAT"),
+        ("xpass",                "FLOAT"),
+        ("score_differential",   "INTEGER"),
+        ("qb_hit",               "INTEGER DEFAULT 0"),
+        ("third_down_converted", "INTEGER DEFAULT 0"),
+        ("third_down_failed",    "INTEGER DEFAULT 0"),
+        ("fourth_down_converted","INTEGER DEFAULT 0"),
+        ("fourth_down_failed",   "INTEGER DEFAULT 0"),
+    ],
     "silver.team_game_stats": [
-        ("_silver_ts", "TIMESTAMPTZ DEFAULT NOW()"),
+        ("_silver_ts",            "TIMESTAMPTZ DEFAULT NOW()"),
+        ("avg_cpoe",              "FLOAT"),
+        ("avg_xpass",             "FLOAT"),
+        ("qb_hits",               "INTEGER"),
+        ("epa_neutral_script",    "FLOAT"),
+        ("epa_pass_early_down",   "FLOAT"),
+        ("epa_rush_early_down",   "FLOAT"),
+        ("epa_third_down",        "FLOAT"),
+        ("epa_rz",                "FLOAT"),
+        ("third_down_pct",        "FLOAT"),
+        ("fourth_down_attempts",  "INTEGER"),
     ],
     "silver.player_game_stats": [
         ("rz_targets",   "INTEGER DEFAULT 0"),
@@ -527,9 +584,27 @@ _EXPECTED_COLS: dict[str, list[tuple[str, str]]] = {
         ("_silver_ts", "TIMESTAMPTZ DEFAULT NOW()"),
     ],
     "gold.team_game_features": [
-        ("target_home_win",    "BOOLEAN"),
-        ("target_home_margin", "INTEGER"),
-        ("target_total_score", "INTEGER"),
+        ("target_home_win",       "BOOLEAN"),
+        ("target_home_margin",    "INTEGER"),
+        ("target_total_score",    "INTEGER"),
+        ("off_cpoe_l4",           "FLOAT"),
+        ("def_cpoe_allowed_l4",   "FLOAT"),
+        ("off_neutral_epa_l4",    "FLOAT"),
+        ("def_neutral_epa_l4",    "FLOAT"),
+        ("off_epa_pass_early_l4", "FLOAT"),
+        ("def_epa_pass_early_l4", "FLOAT"),
+        ("off_epa_rush_early_l4", "FLOAT"),
+        ("def_epa_rush_early_l4", "FLOAT"),
+        ("off_epa_third_down_l4", "FLOAT"),
+        ("def_epa_third_down_l4", "FLOAT"),
+        ("off_epa_rz_l4",         "FLOAT"),
+        ("def_epa_rz_l4",         "FLOAT"),
+        ("off_third_down_pct_l4", "FLOAT"),
+        ("def_third_down_pct_l4", "FLOAT"),
+        ("off_fourth_down_att_l4","FLOAT"),
+    ],
+    "gold.player_game_features": [
+        ("adot_l4", "FLOAT"),
     ],
 }
 

@@ -16,6 +16,17 @@ logger = logging.getLogger(__name__)
 
 SKILL_POSITIONS = {"QB", "RB", "WR", "TE", "FB"}
 
+# Position priors for Bayesian shrinkage (league-average rates, 2016–2024)
+_PRIORS: dict[str, dict] = {
+    "WR": {"catch_rate": 0.64, "yards_per_target": 7.0, "adot": 8.5},
+    "TE": {"catch_rate": 0.68, "yards_per_target": 6.5, "adot": 6.0},
+    "RB": {"catch_rate": 0.73, "yards_per_target": 5.0, "adot": 3.5},
+    "QB": {"catch_rate": 0.65, "yards_per_target": 7.2, "adot": 10.5},
+    "FB": {"catch_rate": 0.70, "yards_per_target": 5.5, "adot": 4.0},
+}
+_DEFAULT_PRIOR = {"catch_rate": 0.65, "yards_per_target": 6.5, "adot": 7.0}
+_K_PRIOR = 4  # prior-equivalent games (shrinks toward prior when n_games < 4)
+
 
 class PlayerFeatureBuilder:
     def __init__(self, conn=None) -> None:
@@ -86,6 +97,7 @@ class PlayerFeatureBuilder:
         pid = str(player["player_id"])
         pos = player.get("position", "UNK")
         recent = snap.player_recent_games(pid, n=ROLLING_WINDOW)
+        n_games = len(recent)
         recent_status = snap.player_recent_status(pid, int(game["season"]), int(game["week"]), n=ROLLING_WINDOW)
 
         # Team volume denominators from rolling L4
@@ -115,18 +127,43 @@ class PlayerFeatureBuilder:
         rz_carries_avg = avg("rz_carries", 0.0)
 
         eps = 1e-6
-        catch_rate = rec_avg / (targets_avg + eps) if targets_avg > 0 else None
-        yds_per_tgt = avg("rec_yards", 0.0) / (targets_avg + eps) if targets_avg > 0 else None
+        prior = _PRIORS.get(pos, _DEFAULT_PRIOR)
+        shrinkage = n_games / (n_games + _K_PRIOR)  # 0 when n_games=0, →1 as n_games→∞
+
+        # aDOT (avg depth of target) — from rolling air_yards / targets sums
+        if not recent.empty and "air_yards" in recent.columns and "targets" in recent.columns:
+            air_sum = float(recent["air_yards"].sum())
+            tgt_sum = float(recent["targets"].sum())
+            adot_raw = air_sum / tgt_sum if tgt_sum > 0 else None
+        else:
+            adot_raw = None
+        adot_l4 = (
+            shrinkage * adot_raw + (1 - shrinkage) * prior["adot"]
+            if adot_raw is not None
+            else (prior["adot"] if n_games == 0 else None)
+        )
+
+        catch_rate_raw = rec_avg / (targets_avg + eps) if targets_avg > 0 else None
+        yds_per_tgt_raw = avg("rec_yards", 0.0) / (targets_avg + eps) if targets_avg > 0 else None
         yds_per_carry = avg("rush_yards", 0.0) / (carries_avg + eps) if carries_avg > 0 else None
         yac_per_rec = avg("yards_after_catch", 0.0) / (rec_avg + eps) if rec_avg > 0 else None
         total_tds_avg = avg("total_tds", 0.0)
         td_per_tgt = total_tds_avg / (targets_avg + eps) if targets_avg > 0 else None
         td_per_carry = total_tds_avg / (carries_avg + eps) if carries_avg > 0 else None
 
-        # Clamp rates to valid range; 0.5 cap is too permissive for small samples
-        # (e.g. a QB with 2 targets and 1 TD scores a 0.50 rate, destroying TD dist)
-        if catch_rate is not None:
-            catch_rate = max(0.0, min(1.0, catch_rate))
+        # Bayesian shrinkage: blend raw rate toward position prior when sample size is small.
+        # Prevents week-1 QB with 2 receiving targets from inflating catch_rate to 1.0.
+        if catch_rate_raw is not None:
+            catch_rate = shrinkage * max(0.0, min(1.0, catch_rate_raw)) + (1 - shrinkage) * prior["catch_rate"]
+        else:
+            catch_rate = prior["catch_rate"] if n_games == 0 else None
+
+        if yds_per_tgt_raw is not None:
+            yds_per_tgt = shrinkage * yds_per_tgt_raw + (1 - shrinkage) * prior["yards_per_target"]
+        else:
+            yds_per_tgt = prior["yards_per_target"] if n_games == 0 else None
+
+        # Clamp TD rates (no shrinkage — priors are poorly constrained for rare events)
         if td_per_tgt is not None:
             td_per_tgt = max(0.0, min(0.20, td_per_tgt))
         if td_per_carry is not None:
@@ -144,7 +181,6 @@ class PlayerFeatureBuilder:
 
         availability = float(player.get("availability", AVAILABILITY_DEFAULT))
         depth_team = player.get("depth_team")
-        n_games = len(recent)
 
         feature_row = {
             "game_id": game["game_id"],
@@ -173,6 +209,7 @@ class PlayerFeatureBuilder:
             "yac_per_rec_l4":           yac_per_rec,
             "td_rate_per_target_l4":    td_per_tgt,
             "td_rate_per_carry_l4":     td_per_carry,
+            "adot_l4":                  adot_l4,
             "opp_def_pass_epa_l4":      opp_feat("def_epa_per_play_l4"),
             "opp_def_rush_epa_l4":      opp_feat("def_rush_epa_l4"),
             "opp_def_sack_rate_l4":     opp_feat("def_sack_rate_l4"),
