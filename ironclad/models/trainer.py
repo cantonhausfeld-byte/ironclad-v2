@@ -247,19 +247,21 @@ class ModelTrainer:
         X_val: pd.DataFrame,
         y_val: pd.DataFrame,
     ) -> dict:
-        from ironclad.models.team.game_outcome import _build_diff_features, TEAM_FEATURES
+        from ironclad.models.team.game_outcome import _build_diff_features, TEAM_FEATURES, CLF_FEATURES
         Xf = _build_diff_features(X_val)
-        feat_cols = [c for c in TEAM_FEATURES if c in Xf.columns]
-        Xm = Xf[feat_cols].fillna(0)
+        clf_cols = [c for c in CLF_FEATURES if c in Xf.columns]
+        reg_cols = [c for c in TEAM_FEATURES if c in Xf.columns]
+        Xm_clf = Xf[clf_cols].fillna(0)
+        Xm_reg = Xf[reg_cols].fillna(0)
 
         if model._clf is None:
             return {}
 
-        probs = model._clf.predict_proba(Xm)[:, 1]
+        probs = model._clf.predict_proba(Xm_clf)[:, 1]
         labels = y_val["home_win"].astype(int).values
 
-        margin_pred = model._reg_margin.predict(Xm)
-        total_pred = model._reg_total.predict(Xm)
+        margin_pred = model._reg_margin.predict(Xm_reg)
+        total_pred = model._reg_total.predict(Xm_reg)
 
         return {
             "val_log_loss": round(log_loss(labels, probs), 4),
