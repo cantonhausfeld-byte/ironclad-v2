@@ -21,6 +21,32 @@ class GameDrawResult:
     home_rush_yards: float
     away_rush_yards: float
     total_plays: int = 0
+    home_effective_pass_rate: float = 0.0
+    away_effective_pass_rate: float = 0.0
+
+
+def _apply_game_script(
+    rng: np.random.Generator,
+    base_rate: float,
+    final_margin: float,
+) -> float:
+    # Halftime margin estimated from final margin with substantial noise —
+    # final-margin blowouts correlate with halftime leads, but not perfectly.
+    # Trailing teams (>7 down at half) pass more; leading teams run more.
+    # Effective rate blends first-half (55% weight, base rate) and second-half
+    # (45% weight, script-adjusted).
+    halftime_est = float(rng.normal(final_margin * 0.45, 7.0))
+    urgency = max(0.0, (-halftime_est - 7.0) / 14.0)
+    comfort = max(0.0, (halftime_est - 7.0) / 14.0)
+
+    if urgency > 0:
+        late_rate = min(0.85, base_rate + urgency * 0.12)
+    elif comfort > 0:
+        late_rate = max(0.35, base_rate - comfort * 0.10)
+    else:
+        late_rate = base_rate
+
+    return float(np.clip(0.55 * base_rate + 0.45 * late_rate, 0.2, 0.85))
 
 
 class GameDraw:
@@ -45,23 +71,26 @@ class GameDraw:
         away_raw = total - home_raw
         home_score = max(0, round(home_raw))
         away_score = max(0, round(away_raw))
+        final_margin = float(home_score - away_score)
 
         # ── Home team volume ──────────────────────────────────────────────────
         home_plays = max(30, int(rng.normal(home_env["total_plays_projected"], 6)))
-        home_pass_rate = float(np.clip(
+        home_base_rate = float(np.clip(
             rng.beta(*beta_from_mean_std(home_env["pass_rate_projected"], 0.06)),
             0.2, 0.85,
         ))
-        home_pass_att = round(home_pass_rate * home_plays)
+        home_effective_rate = _apply_game_script(rng, home_base_rate, final_margin)
+        home_pass_att = round(home_effective_rate * home_plays)
         home_rush_att = home_plays - home_pass_att
 
         # ── Away team volume ──────────────────────────────────────────────────
         away_plays = max(30, int(rng.normal(away_env["total_plays_projected"], 6)))
-        away_pass_rate = float(np.clip(
+        away_base_rate = float(np.clip(
             rng.beta(*beta_from_mean_std(away_env["pass_rate_projected"], 0.06)),
             0.2, 0.85,
         ))
-        away_pass_att = round(away_pass_rate * away_plays)
+        away_effective_rate = _apply_game_script(rng, away_base_rate, -final_margin)
+        away_pass_att = round(away_effective_rate * away_plays)
         away_rush_att = away_plays - away_pass_att
 
         # ── Yardage ───────────────────────────────────────────────────────────
@@ -85,4 +114,6 @@ class GameDraw:
             home_rush_yards=home_rush_yards,
             away_rush_yards=away_rush_yards,
             total_plays=home_plays + away_plays,
+            home_effective_pass_rate=home_effective_rate,
+            away_effective_pass_rate=away_effective_rate,
         )
