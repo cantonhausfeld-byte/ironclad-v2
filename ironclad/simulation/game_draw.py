@@ -23,6 +23,8 @@ class GameDrawResult:
     total_plays: int = 0
     home_effective_pass_rate: float = 0.0
     away_effective_pass_rate: float = 0.0
+    home_game_quality_factor: float = 0.0
+    away_game_quality_factor: float = 0.0
 
 
 def _apply_game_script(
@@ -93,6 +95,14 @@ class GameDraw:
         away_pass_att = round(away_effective_rate * away_plays)
         away_rush_att = away_plays - away_pass_att
 
+        # ── QB game-quality factors ───────────────────────────────────────────
+        # Each team's QB draw is independent — a draw where both QBs play above
+        # average is possible (warm weather, no pass rush). Std=0.15 keeps
+        # 95% of draws in the ±0.30 range, producing a ±9% catch-rate swing
+        # at the per-player level.
+        home_gqf = float(rng.normal(0.0, 0.15))
+        away_gqf = float(rng.normal(0.0, 0.15))
+
         # ── Yardage ───────────────────────────────────────────────────────────
         # Pass yards from attempts × NFL avg yards/attempt (7.2); far better
         # than score × 6 which underestimates low-scoring games and has no
@@ -116,4 +126,6 @@ class GameDraw:
             total_plays=home_plays + away_plays,
             home_effective_pass_rate=home_effective_rate,
             away_effective_pass_rate=away_effective_rate,
+            home_game_quality_factor=home_gqf,
+            away_game_quality_factor=away_gqf,
         )

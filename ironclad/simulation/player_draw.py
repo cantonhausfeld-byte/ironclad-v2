@@ -62,6 +62,7 @@ class PlayerDraw:
         ctx: PlayerContext,
         team_pass_att: int,
         team_rush_att: int,
+        game_quality_factor: float = 0.0,
     ) -> PlayerDrawResult:
         result = PlayerDrawResult(
             player_id=ctx.player_id,
@@ -82,16 +83,21 @@ class PlayerDraw:
 
         # ── Receiving ─────────────────────────────────────────────────────────
         if ctx.position in ("WR", "TE", "RB", "FB") and ctx.targets_projected > 0:
+            # Correlate receiver efficiency with QB quality for this draw.
+            # gqf=+0.15 (1 std) → +4.5% catch rate, +3.75% yards/target.
+            adj_catch_rate = min(0.99, (ctx.catch_rate or 0.65) * (1.0 + game_quality_factor * 0.30))
+            adj_yds_per_tgt = max(1.0, (ctx.yards_per_target or 8.0) * (1.0 + game_quality_factor * 0.25))
+
             lam = max(0.0, ctx.targets_projected * pass_scale)
             targets = poisson_draw(rng, lam)
             receptions = 0
             rec_yards = 0.0
             for _ in range(targets):
-                if bernoulli(rng, ctx.catch_rate or 0.65):
+                if bernoulli(rng, adj_catch_rate):
                     receptions += 1
                     yds = float(truncated_normal(
                         rng,
-                        mean=ctx.yards_per_target or 8.0,
+                        mean=adj_yds_per_tgt,
                         std=ctx.yards_per_target_std,
                         low=-5.0, high=80.0,
                     )[0])
@@ -122,11 +128,13 @@ class PlayerDraw:
             pass_att = poisson_draw(rng, lam)
             # Clamp to realistic NFL completion rate range; ctx.catch_rate may
             # reflect a receiving catch rate (meaningless for QBs) rather than
-            # pass completion rate.
-            comp_rate = max(0.50, min(0.75, ctx.catch_rate or 0.64))
+            # pass completion rate. Apply game-quality factor to QB accuracy.
+            base_comp_rate = max(0.50, min(0.75, ctx.catch_rate or 0.64))
+            comp_rate = max(0.45, min(0.80, base_comp_rate * (1.0 + game_quality_factor * 0.20)))
             completions = int(rng.binomial(pass_att, comp_rate))
+            adj_ypc = (ctx.yards_per_target or 8.5) * (1.0 + game_quality_factor * 0.20)
             pass_yards = max(0.0, float(rng.normal(
-                completions * (ctx.yards_per_target or 8.5),
+                completions * adj_ypc,
                 completions * 3.5,
             ))) if completions > 0 else 0.0
             result.pass_attempts = pass_att

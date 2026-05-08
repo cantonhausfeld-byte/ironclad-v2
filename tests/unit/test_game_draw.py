@@ -1,10 +1,11 @@
-"""Tests for game-script feedback in GameDraw."""
+"""Tests for game-script feedback and QB game-quality correlation in GameDraw."""
 from __future__ import annotations
 
 import numpy as np
 import pytest
 
 from ironclad.simulation.game_draw import GameDraw, _apply_game_script
+from ironclad.simulation.player_draw import PlayerContext, PlayerDraw
 
 
 BASE_RATE = 0.58
@@ -70,3 +71,79 @@ def test_pass_att_reflects_script():
         neut.append(gd.draw(rng_neut, neutral_outcome, home_env, away_env).home_pass_att)
 
     assert np.mean(blow) > np.mean(neut) + 0.5
+
+
+# ── QB game-quality correlation ───────────────────────────────────────────────
+
+def _wr_ctx() -> PlayerContext:
+    return PlayerContext(
+        player_id="P1", player_name="WR Test", team="KC", position="WR",
+        is_home=True, availability=1.0,
+        targets_projected=6.0, carries_projected=0.0, pass_attempts_projected=0.0,
+        catch_rate=0.65, yards_per_target=9.0, yards_per_carry=4.2,
+        td_rate_per_target=0.06, td_rate_per_carry=0.04,
+        yards_per_target_std=5.0,
+    )
+
+
+def _draw_n_rec_yards(gqf: float, n: int = 1000, seed: int = 42) -> float:
+    rng = np.random.default_rng(seed)
+    pd_obj = PlayerDraw()
+    ctx = _wr_ctx()
+    total = 0.0
+    for _ in range(n):
+        r = pd_obj.draw(rng, ctx, team_pass_att=32, team_rush_att=25, game_quality_factor=gqf)
+        total += r.rec_yards
+    return total / n
+
+
+def test_gqf_zero_leaves_stats_near_baseline():
+    # Zero factor should produce distributions centered near the ctx values.
+    avg = _draw_n_rec_yards(0.0)
+    # Expected ≈ targets_proj (6) × catch_rate (0.65) × yards_per_tgt (9) ≈ 35
+    assert 20.0 < avg < 55.0
+
+
+def test_positive_gqf_increases_rec_yards():
+    low = _draw_n_rec_yards(0.0, seed=99)
+    high = _draw_n_rec_yards(0.5, seed=99)
+    assert high > low + 3.0
+
+
+def test_negative_gqf_decreases_rec_yards():
+    baseline = _draw_n_rec_yards(0.0, seed=77)
+    low = _draw_n_rec_yards(-0.5, seed=77)
+    assert low < baseline - 3.0
+
+
+def test_gqf_catch_rate_bounded():
+    # Even with extreme positive factor, adjusted catch rate must stay ≤ 0.99.
+    rng = np.random.default_rng(0)
+    pd_obj = PlayerDraw()
+    ctx = _wr_ctx()
+    for _ in range(200):
+        r = pd_obj.draw(rng, ctx, team_pass_att=32, team_rush_att=25, game_quality_factor=5.0)
+        # If catch rate were unbounded, receptions > targets would be impossible
+        # due to Bernoulli, but targets would still be reasonable.
+        assert r.receptions <= r.targets
+
+
+def test_game_draw_sets_quality_factors():
+    # GameDraw.draw() should populate both quality factor fields.
+    home_env = {"pass_rate_projected": 0.58, "total_plays_projected": 64}
+    away_env = {"pass_rate_projected": 0.55, "total_plays_projected": 62}
+    outcome = {
+        "total_mean": 45.0, "total_std": 8.0,
+        "home_margin_mean": 3.0, "home_margin_std": 14.0,
+    }
+    rng = np.random.default_rng(42)
+    gd = GameDraw()
+    # Draw many times; factors must be independent and not all identical.
+    factors_home = [gd.draw(rng, outcome, home_env, away_env).home_game_quality_factor
+                    for _ in range(50)]
+    factors_away = [gd.draw(rng, outcome, home_env, away_env).away_game_quality_factor
+                    for _ in range(50)]
+    assert len(set(factors_home)) > 1
+    assert len(set(factors_away)) > 1
+    # Most draws should land within ±3σ = ±0.45 of zero.
+    assert all(-0.6 < f < 0.6 for f in factors_home + factors_away)

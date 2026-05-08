@@ -60,13 +60,21 @@ class MonteCarloEngine:
             # Team-level draw
             gd = self._game_draw.draw(rng, home_outcome, home_env, away_env)
 
-            # Player-level draws
+            # Player-level draws — pass QB game-quality factor so all
+            # skill-position players on the same team share a correlated
+            # efficiency adjustment within this draw.
             home_player_draws = [
-                self._player_draw.draw(rng, ctx, gd.home_pass_att, gd.home_rush_att)
+                self._player_draw.draw(
+                    rng, ctx, gd.home_pass_att, gd.home_rush_att,
+                    game_quality_factor=gd.home_game_quality_factor,
+                )
                 for ctx in home_contexts
             ]
             away_player_draws = [
-                self._player_draw.draw(rng, ctx, gd.away_pass_att, gd.away_rush_att)
+                self._player_draw.draw(
+                    rng, ctx, gd.away_pass_att, gd.away_rush_att,
+                    game_quality_factor=gd.away_game_quality_factor,
+                )
                 for ctx in away_contexts
             ]
 
