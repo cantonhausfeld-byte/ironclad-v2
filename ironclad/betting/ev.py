@@ -52,3 +52,12 @@ def expected_value(model_prob: float, american_odds: int, stake: float = 1.0) ->
 def edge(model_prob: float, american_odds: int) -> float:
     """Probabilistic edge: model_prob - market_implied_prob (vig included)."""
     return model_prob - american_to_prob(american_odds)
+
+
+def prob_to_american(p: float) -> int:
+    """Convert a fair probability to American odds (no vig)."""
+    if p <= 0.0 or p >= 1.0:
+        raise ValueError(f"Probability must be in (0, 1); got {p}")
+    if p >= 0.5:
+        return round(-(p / (1.0 - p)) * 100)
+    return round(((1.0 - p) / p) * 100)

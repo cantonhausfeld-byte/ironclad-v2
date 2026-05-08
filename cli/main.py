@@ -311,6 +311,78 @@ def edges(game_id, props_file, n_draws, kelly_fraction, min_ev, backfill_if_miss
     click.echo(show.to_string(index=False))
 
 
+# ── parlay ────────────────────────────────────────────────────────────────────
+
+@cli.command()
+@click.option("--game-id", required=True, help="Canonical game ID (e.g. 2024_18_KC_LAC)")
+@click.option("--legs-file", required=True, type=click.Path(exists=True, dir_okay=False),
+              help="CSV of parlay legs: player_id,stat_type,direction,line[,market_odds]")
+@click.option("--n-draws", default=DEFAULT_N_DRAWS, show_default=True, type=int)
+@click.option("--backfill-if-missing", is_flag=True, default=False)
+def parlay(game_id, legs_file, n_draws, backfill_if_missing) -> None:
+    """Price a same-game parlay using the Monte Carlo joint distribution."""
+    from ironclad.betting.parlays import load_parlay_legs, parlay_probability, market_independence_prob
+    from ironclad.betting.ev import prob_to_american, american_to_prob
+    from ironclad.betting.props import PropAnalyzer
+    from ironclad.workflow.matchup import MatchupWorkflow
+
+    legs = load_parlay_legs(Path(legs_file))
+    if not legs:
+        click.echo("ERROR: No legs parsed from CSV", err=True)
+        sys.exit(1)
+
+    click.echo(f"Running simulation for {game_id} (n_draws={n_draws})...")
+    result, _, _, _ = MatchupWorkflow(n_draws=n_draws).simulate(
+        game_id, backfill_if_missing=backfill_if_missing,
+    )
+
+    # Per-leg individual model probabilities
+    from ironclad.betting.props import PropLine
+    from ironclad.simulation.results import SimulationResult
+    player_df = result._player_df
+
+    click.echo(f"\nParlay: {len(legs)}-leg SGP for {game_id}  (n={n_draws} draws)\n")
+    click.echo(f"  {'Player':<24} {'stat':<12} {'dir':<6} {'line':>6}  {'model':>7}  {'market':>7}  {'edge':>7}")
+    click.echo("  " + "-" * 72)
+
+    for leg in legs:
+        player_rows = player_df[player_df["player_id"] == leg.player_id] if not player_df.empty else player_df
+        player_name = player_rows.iloc[0]["player_name"] if not player_rows.empty else leg.player_id
+
+        # Individual model probability for this leg
+        from ironclad.betting.parlays import parlay_probability as single_leg_prob
+        leg_prob = single_leg_prob(result, [leg])
+
+        market_str = f"{american_to_prob(leg.market_odds):.1%}" if leg.market_odds is not None else "  n/a "
+        edge_str = (
+            f"{leg_prob - american_to_prob(leg.market_odds):+.1%}"
+            if leg.market_odds is not None else "  n/a "
+        )
+        line_str = f"{leg.line:.1f}" if leg.line is not None else "  -"
+        click.echo(
+            f"  {player_name:<24} {leg.stat_type:<12} {leg.direction:<6} {line_str:>6}  "
+            f"{leg_prob:>6.1%}  {market_str:>7}  {edge_str:>7}"
+        )
+
+    joint_prob = parlay_probability(result, legs)
+    fair_odds = prob_to_american(joint_prob) if 0 < joint_prob < 1 else None
+    fair_str = f"+{fair_odds}" if fair_odds and fair_odds > 0 else str(fair_odds)
+
+    click.echo()
+    click.echo(f"  Joint probability (model):     {joint_prob:.2%}   fair odds: {fair_str}")
+
+    mkt_prob = market_independence_prob(legs)
+    if mkt_prob is not None and 0 < mkt_prob < 1:
+        mkt_odds = prob_to_american(mkt_prob)
+        mkt_str = f"+{mkt_odds}" if mkt_odds > 0 else str(mkt_odds)
+        parlay_edge = joint_prob - mkt_prob
+        edge_direction = "model UNDERprices" if parlay_edge < 0 else "market UNDERprices"
+        click.echo(f"  Market implied (independent):  {mkt_prob:.2%}   market odds: {mkt_str}")
+        click.echo(f"  Parlay edge:                  {parlay_edge:+.2%}  ({edge_direction} this parlay)")
+    else:
+        click.echo("  (Provide market_odds for all legs to see market comparison)")
+
+
 # ── status ─────────────────────────────────────────────────────────────────────
 
 @cli.command()
