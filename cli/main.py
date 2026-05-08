@@ -263,6 +263,54 @@ def _parse_seasons(spec: str) -> list[int]:
         return []
 
 
+# ── edges ─────────────────────────────────────────────────────────────────────
+
+@cli.command()
+@click.option("--game-id", required=True, help="Canonical game ID (e.g. 2024_18_KC_LAC)")
+@click.option("--props-file", required=True, type=click.Path(exists=True, dir_okay=False),
+              help="CSV of prop lines: player_id,stat_type,line,over_odds,under_odds")
+@click.option("--n-draws", default=DEFAULT_N_DRAWS, show_default=True, type=int)
+@click.option("--kelly-fraction", default=0.25, show_default=True, type=float,
+              help="Fractional Kelly multiplier (0.25 = quarter Kelly)")
+@click.option("--min-ev", default=0.0, show_default=True, type=float,
+              help="Filter: only show edges with EV >= this value (per $1 stake)")
+@click.option("--backfill-if-missing", is_flag=True, default=False)
+def edges(game_id, props_file, n_draws, kelly_fraction, min_ev, backfill_if_missing) -> None:
+    """Compute +EV player props from a Monte Carlo simulation against market lines."""
+    from ironclad.betting.props import PropAnalyzer, load_prop_lines
+    from ironclad.workflow.matchup import MatchupWorkflow
+
+    prop_lines = load_prop_lines(Path(props_file))
+    if not prop_lines:
+        click.echo("ERROR: No prop lines parsed from CSV", err=True)
+        sys.exit(1)
+    click.echo(f"Loaded {len(prop_lines)} prop lines from {props_file}")
+
+    click.echo(f"Running simulation for {game_id} (n_draws={n_draws})...")
+    result, _, _, _ = MatchupWorkflow(n_draws=n_draws).simulate(
+        game_id, backfill_if_missing=backfill_if_missing,
+    )
+
+    analyzer = PropAnalyzer(kelly_fraction=kelly_fraction)
+    edges_df = analyzer.analyze(result, prop_lines)
+    if edges_df.empty:
+        click.echo("No edges produced (no matching player_ids in simulation).")
+        return
+
+    if min_ev > 0:
+        edges_df = edges_df[edges_df["ev"] >= min_ev].reset_index(drop=True)
+
+    if edges_df.empty:
+        click.echo(f"No edges with EV >= {min_ev}")
+        return
+
+    click.echo(f"\nTop edges (kelly_fraction={kelly_fraction}):\n")
+    cols = ["player_name", "position", "stat_type", "market_line", "side", "odds",
+            "model_prob", "market_prob", "edge", "ev", "kelly"]
+    show = edges_df[[c for c in cols if c in edges_df.columns]]
+    click.echo(show.to_string(index=False))
+
+
 # ── status ─────────────────────────────────────────────────────────────────────
 
 @cli.command()
