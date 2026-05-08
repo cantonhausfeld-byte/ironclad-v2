@@ -487,5 +487,45 @@ def status() -> None:
         click.echo(f"Status check failed: {exc}", err=True)
 
 
+# ── serve ─────────────────────────────────────────────────────────────────────
+
+@cli.command()
+@click.option("--port", default=8501, show_default=True, type=int,
+              help="Port to run the Streamlit dashboard on")
+@click.option("--host", default="localhost", show_default=True,
+              help="Host/address to bind to")
+def serve(port, host) -> None:
+    """Launch the Streamlit betting intelligence dashboard."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    app_path = Path(__file__).parent.parent / "ironclad" / "dashboard" / "app.py"
+    if not app_path.exists():
+        click.echo(f"ERROR: Dashboard not found at {app_path}", err=True)
+        sys.exit(1)
+
+    click.echo(f"Starting ironclad dashboard at http://{host}:{port}")
+    click.echo("Press Ctrl+C to stop.")
+    try:
+        subprocess.run(
+            [
+                sys.executable, "-m", "streamlit", "run", str(app_path),
+                "--server.port", str(port),
+                "--server.address", host,
+                "--server.headless", "true",
+            ],
+            check=True,
+        )
+    except KeyboardInterrupt:
+        click.echo("\nDashboard stopped.")
+    except FileNotFoundError:
+        click.echo(
+            "ERROR: streamlit not installed. Run: pip install 'ironclad-v2[dashboard]'",
+            err=True,
+        )
+        sys.exit(1)
+
+
 if __name__ == "__main__":
     cli()
