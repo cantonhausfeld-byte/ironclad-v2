@@ -542,6 +542,52 @@ def _gold(conn: duckdb.DuckDBPyConnection) -> None:
     )
     """)
 
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS gold.betting_edges (
+        edge_id     VARCHAR NOT NULL,
+        analyzed_at TIMESTAMPTZ NOT NULL,
+        game_id     VARCHAR NOT NULL,
+        n_draws     INTEGER,
+        player_id   VARCHAR NOT NULL,
+        player_name VARCHAR,
+        team        VARCHAR,
+        position    VARCHAR,
+        stat_type   VARCHAR NOT NULL,
+        market_line FLOAT,
+        side        VARCHAR NOT NULL,
+        odds        INTEGER,
+        model_prob  FLOAT,
+        market_prob FLOAT,
+        edge        FLOAT,
+        ev          FLOAT,
+        kelly       FLOAT,
+        model_p10   FLOAT,
+        model_p50   FLOAT,
+        model_p90   FLOAT,
+        PRIMARY KEY (edge_id)
+    )
+    """)
+
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS gold.betting_results (
+        result_id     VARCHAR NOT NULL,
+        edge_id       VARCHAR,
+        game_id       VARCHAR NOT NULL,
+        player_id     VARCHAR NOT NULL,
+        stat_type     VARCHAR NOT NULL,
+        side          VARCHAR NOT NULL,
+        market_line   FLOAT,
+        odds          INTEGER,
+        model_prob    FLOAT,
+        ev            FLOAT,
+        units_wagered FLOAT,
+        result        VARCHAR NOT NULL,
+        profit_units  FLOAT NOT NULL,
+        settled_at    TIMESTAMPTZ NOT NULL,
+        PRIMARY KEY (result_id)
+    )
+    """)
+
 
 # ── Migrations (additive column additions for existing DBs) ───────────────────
 

@@ -275,7 +275,9 @@ def _parse_seasons(spec: str) -> list[int]:
 @click.option("--min-ev", default=0.0, show_default=True, type=float,
               help="Filter: only show edges with EV >= this value (per $1 stake)")
 @click.option("--backfill-if-missing", is_flag=True, default=False)
-def edges(game_id, props_file, n_draws, kelly_fraction, min_ev, backfill_if_missing) -> None:
+@click.option("--save", is_flag=True, default=False,
+              help="Persist edges to gold.betting_edges for later settling")
+def edges(game_id, props_file, n_draws, kelly_fraction, min_ev, backfill_if_missing, save) -> None:
     """Compute +EV player props from a Monte Carlo simulation against market lines."""
     from ironclad.betting.props import PropAnalyzer, load_prop_lines
     from ironclad.workflow.matchup import MatchupWorkflow
@@ -309,6 +311,16 @@ def edges(game_id, props_file, n_draws, kelly_fraction, min_ev, backfill_if_miss
             "model_prob", "market_prob", "edge", "ev", "kelly"]
     show = edges_df[[c for c in cols if c in edges_df.columns]]
     click.echo(show.to_string(index=False))
+
+    if save:
+        from ironclad.eval.performance_tracker import save_edges
+        from ironclad.store.connection import get_connection
+        from ironclad.store.schema import create_all_tables
+        conn = get_connection()
+        create_all_tables(conn)
+        ids = save_edges(conn, game_id, n_draws, edges_df)
+        click.echo(f"\nSaved {len(ids)} edge(s) to gold.betting_edges.")
+        click.echo(f"Edge IDs: {', '.join(ids)}")
 
 
 # ── parlay ────────────────────────────────────────────────────────────────────
@@ -381,6 +393,68 @@ def parlay(game_id, legs_file, n_draws, backfill_if_missing) -> None:
         click.echo(f"  Parlay edge:                  {parlay_edge:+.2%}  ({edge_direction} this parlay)")
     else:
         click.echo("  (Provide market_odds for all legs to see market comparison)")
+
+
+# ── status ─────────────────────────────────────────────────────────────────────
+
+# ── settle ────────────────────────────────────────────────────────────────────
+
+@cli.command()
+@click.option("--edge-id", required=True,
+              help="8-char edge ID printed by 'ironclad edges --save'")
+@click.option("--result", required=True,
+              type=click.Choice(["win", "loss", "push"]),
+              help="Outcome of the bet")
+@click.option("--units", default=1.0, show_default=True, type=float,
+              help="Units wagered (e.g. 1.0 = one Kelly unit)")
+def settle(edge_id, result, units) -> None:
+    """Record the settled outcome of a placed bet."""
+    from ironclad.eval.performance_tracker import settle_bet
+    from ironclad.store.connection import get_connection
+    from ironclad.store.schema import create_all_tables
+    conn = get_connection()
+    create_all_tables(conn)
+    try:
+        outcome = settle_bet(conn, edge_id, result, units)
+    except ValueError as e:
+        click.echo(f"ERROR: {e}", err=True)
+        sys.exit(1)
+    sign = "+" if outcome["profit_units"] >= 0 else ""
+    click.echo(
+        f"Settled: {outcome['result']}  |  "
+        f"{outcome['stat_type']} {outcome['side']}  |  "
+        f"profit: {sign}{outcome['profit_units']:.2f} units"
+    )
+
+
+# ── results ───────────────────────────────────────────────────────────────────
+
+@cli.command()
+@click.option("--game-id", default=None, help="Filter to a specific game")
+def results(game_id) -> None:
+    """Show P&L summary from settled bets."""
+    from ironclad.eval.performance_tracker import load_results, pnl_summary
+    from ironclad.store.connection import get_connection
+    from ironclad.store.schema import create_all_tables
+    conn = get_connection()
+    create_all_tables(conn)
+    df = load_results(conn, game_id=game_id)
+    if df.empty:
+        click.echo("No settled bets found. Use 'ironclad edges --save' then 'ironclad settle'.")
+        return
+    summary = pnl_summary(df)
+    click.echo("\nBetting Results")
+    click.echo(f"  Total bets:    {summary['total_bets']}")
+    click.echo(f"  Win / Loss:    {summary['wins']} / {summary['losses']}")
+    click.echo(f"  Win rate:      {summary['win_rate']:.1%}")
+    click.echo(f"  Total profit:  {summary['total_profit_units']:+.2f} units")
+    click.echo(f"  Total wagered: {summary['total_wagered_units']:.2f} units")
+    click.echo(f"  ROI:           {summary['roi']:+.1%}")
+    click.echo()
+    cols = ["result_id", "stat_type", "side", "market_line", "odds",
+            "model_prob", "ev", "units_wagered", "result", "profit_units"]
+    show = df[[c for c in cols if c in df.columns]]
+    click.echo(show.to_string(index=False))
 
 
 # ── status ─────────────────────────────────────────────────────────────────────
