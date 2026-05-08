@@ -291,6 +291,60 @@ def odds() -> None:
         sys.exit(1)
 
 
+# ── run ───────────────────────────────────────────────────────────────────────
+
+@cli.command("run")
+@click.option("--season", default=None, type=int,
+              help="NFL season year (auto-detected from schedule if omitted)")
+@click.option("--week", default=None, type=int,
+              help="Week number (auto-detected from schedule if omitted)")
+@click.option("--n-draws", default=DEFAULT_N_DRAWS, show_default=True, type=int)
+@click.option("--kelly-fraction", default=0.25, show_default=True, type=float)
+@click.option("--min-ev", default=0.0, show_default=True, type=float,
+              help="Only save edges with EV >= this value")
+@click.option("--no-odds", is_flag=True, default=False,
+              help="Skip The Odds API fetch (use if ODDS_API_KEY not set)")
+def run_weekly(season, week, n_draws, kelly_fraction, min_ev, no_odds) -> None:
+    """Full weekly pipeline: data refresh → odds → simulate all games → save edges.
+
+    Runs everything in one shot. Suitable for cron:
+
+      0 10 * * 3  ironclad run   # every Wednesday at 10am
+    """
+    from ironclad.workflow.auto_run import AutoRunWorkflow
+
+    try:
+        result = AutoRunWorkflow(
+            n_draws=n_draws,
+            kelly_fraction=kelly_fraction,
+            min_ev=min_ev,
+            skip_odds=no_odds,
+        ).run(season=season, week=week)
+    except ValueError as exc:
+        click.echo(f"ERROR: {exc}", err=True)
+        sys.exit(1)
+
+    s, w = result["season"], result["week"]
+    click.echo(f"\nironclad auto-run — {s} Week {w}")
+    click.echo("─" * 40)
+    fb = result["weekly"].get("features_built", "?")
+    click.echo(f"Data refresh:     ✓ {fb} game feature sets built")
+    if not no_odds:
+        click.echo(f"Odds/props fetch: ✓ {result['odds_rows']} rows ingested")
+    gt, gs = result["games_total"], result["games_simulated"]
+    skipped_count = gt - gs
+    click.echo(
+        f"Simulations:      ✓ {gs}/{gt} games"
+        + (f" ({skipped_count} skipped)" if skipped_count else "")
+    )
+    click.echo(f"Edges saved:      ✓ {result['edges_saved']} → gold.betting_edges")
+    if result["skipped"]:
+        click.echo("Skipped:")
+        for item in result["skipped"]:
+            click.echo(f"  - {item}")
+    click.echo("\nRun `ironclad serve` to view edges in the dashboard.")
+
+
 # ── edges ─────────────────────────────────────────────────────────────────────
 
 @cli.command()
