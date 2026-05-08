@@ -27,6 +27,56 @@ TEAM_MAP: dict[str, str] = {
 }
 
 
+# Maps The Odds API full team names → canonical abbreviations.
+_FULL_NAME_TO_ABBR: dict[str, str] = {
+    "Arizona Cardinals": "ARI",
+    "Atlanta Falcons": "ATL",
+    "Baltimore Ravens": "BAL",
+    "Buffalo Bills": "BUF",
+    "Carolina Panthers": "CAR",
+    "Chicago Bears": "CHI",
+    "Cincinnati Bengals": "CIN",
+    "Cleveland Browns": "CLE",
+    "Dallas Cowboys": "DAL",
+    "Denver Broncos": "DEN",
+    "Detroit Lions": "DET",
+    "Green Bay Packers": "GB",
+    "Houston Texans": "HOU",
+    "Indianapolis Colts": "IND",
+    "Jacksonville Jaguars": "JAX",
+    "Kansas City Chiefs": "KC",
+    "Las Vegas Raiders": "LV",
+    "Los Angeles Chargers": "LAC",
+    "Los Angeles Rams": "LAR",
+    "Miami Dolphins": "MIA",
+    "Minnesota Vikings": "MIN",
+    "New England Patriots": "NE",
+    "New Orleans Saints": "NO",
+    "New York Giants": "NYG",
+    "New York Jets": "NYJ",
+    "Philadelphia Eagles": "PHI",
+    "Pittsburgh Steelers": "PIT",
+    "San Francisco 49ers": "SF",
+    "Seattle Seahawks": "SEA",
+    "Tampa Bay Buccaneers": "TB",
+    "Tennessee Titans": "TEN",
+    "Washington Commanders": "WAS",
+    # Historical names
+    "Washington Football Team": "WAS",
+    "Washington Redskins": "WAS",
+    "Oakland Raiders": "LV",
+    "San Diego Chargers": "LAC",
+    "St. Louis Rams": "LAR",
+}
+
+
+def full_name_to_abbr(name: str | None) -> str | None:
+    """Map an Odds API full team name to its canonical abbreviation, or None if unknown."""
+    if not name:
+        return None
+    return _FULL_NAME_TO_ABBR.get(name.strip())
+
+
 def normalize_team(team: str | None) -> str | None:
     """Return canonical team abbreviation, or the input unchanged if unknown."""
     if not team or not isinstance(team, str):

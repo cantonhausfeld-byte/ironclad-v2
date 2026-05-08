@@ -52,6 +52,47 @@ class PropLine:
             raise ValueError(f"Unsupported stat_type: {self.stat_type}")
 
 
+def load_prop_lines_from_db(conn, game_id: str) -> list[PropLine]:
+    """Load prop lines from bronze.player_props for a game_id.
+
+    Only returns rows where player_id was resolved; skips unmatched players.
+    Deduplicates by (player_id, stat_type), keeping the row with most odds data.
+    """
+    try:
+        df = conn.execute(
+            "SELECT * FROM bronze.player_props "
+            "WHERE game_id = ? AND player_id IS NOT NULL "
+            "ORDER BY retrieved_at DESC",
+            [game_id],
+        ).df()
+    except Exception:
+        return []
+
+    if df.empty:
+        return []
+
+    lines: list[PropLine] = []
+    seen: set[tuple[str, str]] = set()
+    for _, row in df.iterrows():
+        key = (str(row["player_id"]), str(row["stat_type"]))
+        if key in seen:
+            continue
+        seen.add(key)
+        try:
+            pl = PropLine(
+                player_id=str(row["player_id"]),
+                stat_type=str(row["stat_type"]),
+                line=None if pd.isna(row.get("line")) else float(row["line"]),
+                over_odds=None if pd.isna(row.get("over_odds")) else int(row["over_odds"]),
+                under_odds=None if pd.isna(row.get("under_odds")) else int(row["under_odds"]),
+            )
+            pl.validate()
+            lines.append(pl)
+        except (ValueError, KeyError, TypeError):
+            continue
+    return lines
+
+
 def load_prop_lines(path: Path) -> list[PropLine]:
     """Load prop lines from CSV.
 

@@ -263,12 +263,41 @@ def _parse_seasons(spec: str) -> list[int]:
         return []
 
 
+# ── odds ──────────────────────────────────────────────────────────────────────
+
+@cli.command()
+def odds() -> None:
+    """Fetch this week's game odds and player props from The Odds API.
+
+    Stores game-level odds in bronze.odds and player props (with resolved
+    player_ids) in bronze.player_props. Run before `ironclad edges` to
+    avoid needing a manual --props-file.
+    """
+    from ironclad.ingest.odds import OddsIngestor
+    from ironclad.store.connection import get_connection
+    from ironclad.store.schema import create_all_tables
+    from ironclad.store.writer import BronzeWriter
+
+    conn = get_connection()
+    create_all_tables(conn)
+    writer = BronzeWriter(conn=conn)
+
+    click.echo("Fetching odds and player props from The Odds API...")
+    try:
+        n = OddsIngestor(writer=writer, conn=conn).ingest()
+        click.echo(f"Ingested {n} odds/prop rows into bronze.")
+    except Exception as exc:
+        click.echo(f"ERROR: {exc}", err=True)
+        sys.exit(1)
+
+
 # ── edges ─────────────────────────────────────────────────────────────────────
 
 @cli.command()
 @click.option("--game-id", required=True, help="Canonical game ID (e.g. 2024_18_KC_LAC)")
-@click.option("--props-file", required=True, type=click.Path(exists=True, dir_okay=False),
-              help="CSV of prop lines: player_id,stat_type,line,over_odds,under_odds")
+@click.option("--props-file", default=None, type=click.Path(exists=True, dir_okay=False),
+              help="CSV of prop lines (player_id,stat_type,line,over_odds,under_odds). "
+                   "If omitted, props are loaded from bronze.player_props (run `ironclad odds` first).")
 @click.option("--n-draws", default=DEFAULT_N_DRAWS, show_default=True, type=int)
 @click.option("--kelly-fraction", default=0.25, show_default=True, type=float,
               help="Fractional Kelly multiplier (0.25 = quarter Kelly)")
@@ -279,14 +308,29 @@ def _parse_seasons(spec: str) -> list[int]:
               help="Persist edges to gold.betting_edges for later settling")
 def edges(game_id, props_file, n_draws, kelly_fraction, min_ev, backfill_if_missing, save) -> None:
     """Compute +EV player props from a Monte Carlo simulation against market lines."""
-    from ironclad.betting.props import PropAnalyzer, load_prop_lines
+    from ironclad.betting.props import PropAnalyzer, load_prop_lines, load_prop_lines_from_db
     from ironclad.workflow.matchup import MatchupWorkflow
 
-    prop_lines = load_prop_lines(Path(props_file))
-    if not prop_lines:
-        click.echo("ERROR: No prop lines parsed from CSV", err=True)
-        sys.exit(1)
-    click.echo(f"Loaded {len(prop_lines)} prop lines from {props_file}")
+    if props_file:
+        prop_lines = load_prop_lines(Path(props_file))
+        if not prop_lines:
+            click.echo("ERROR: No prop lines parsed from CSV", err=True)
+            sys.exit(1)
+        click.echo(f"Loaded {len(prop_lines)} prop lines from {props_file}")
+    else:
+        from ironclad.store.connection import get_connection as _gc
+        from ironclad.store.schema import create_all_tables as _cat
+        _conn = _gc()
+        _cat(_conn)
+        prop_lines = load_prop_lines_from_db(_conn, game_id)
+        if not prop_lines:
+            click.echo(
+                f"No player props found in DB for {game_id}.\n"
+                "Run `ironclad odds` to fetch from The Odds API, or provide --props-file.",
+                err=True,
+            )
+            sys.exit(1)
+        click.echo(f"Loaded {len(prop_lines)} prop lines from bronze.player_props")
 
     click.echo(f"Running simulation for {game_id} (n_draws={n_draws})...")
     result, _, _, _ = MatchupWorkflow(n_draws=n_draws).simulate(

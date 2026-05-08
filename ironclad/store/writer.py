@@ -79,6 +79,11 @@ class BronzeWriter(_BaseWriter):
         df["_ingest_ts"] = _now()
         return self._append(df, "bronze.odds")
 
+    def write_player_props(self, df: pd.DataFrame) -> int:
+        df = df.copy()
+        df["_ingest_ts"] = _now()
+        return self._append(df, "bronze.player_props")
+
     def write_weather(self, df: pd.DataFrame) -> int:
         df = df.copy()
         df["_ingest_ts"] = _now()

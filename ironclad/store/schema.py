@@ -224,6 +224,23 @@ def _bronze(conn: duckdb.DuckDBPyConnection) -> None:
     """)
 
     conn.execute("""
+    CREATE TABLE IF NOT EXISTS bronze.player_props (
+        game_id         VARCHAR NOT NULL,
+        event_id        VARCHAR,
+        player_name     VARCHAR NOT NULL,
+        player_id       VARCHAR,
+        team            VARCHAR,
+        stat_type       VARCHAR NOT NULL,
+        line            FLOAT,
+        over_odds       INTEGER,
+        under_odds      INTEGER,
+        bookmaker       VARCHAR NOT NULL,
+        retrieved_at    TIMESTAMPTZ NOT NULL,
+        _ingest_ts      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+    """)
+
+    conn.execute("""
     CREATE TABLE IF NOT EXISTS bronze.stadiums (
         stadium_id   VARCHAR NOT NULL PRIMARY KEY,
         stadium_name VARCHAR NOT NULL,
