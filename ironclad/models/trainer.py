@@ -246,6 +246,7 @@ class ModelTrainer:
         model: GameOutcomeModel,
         X_val: pd.DataFrame,
         y_val: pd.DataFrame,
+        breakdown_by_week: bool = False,
     ) -> dict:
         from ironclad.models.team.game_outcome import _build_diff_features, TEAM_FEATURES, CLF_FEATURES
         Xf = _build_diff_features(X_val)
@@ -263,14 +264,41 @@ class ModelTrainer:
         margin_pred = model._reg_margin.predict(Xm_reg)
         total_pred = model._reg_total.predict(Xm_reg)
 
-        return {
+        result = {
             "val_log_loss": round(log_loss(labels, probs), 4),
             "val_brier": round(brier_score_loss(labels, probs), 4),
             "val_margin_mae": round(mean_absolute_error(y_val["home_margin"].values, margin_pred), 2),
             "val_total_mae": round(mean_absolute_error(y_val["total_score"].values, total_pred), 2),
         }
 
-    def evaluate(self, val_seasons: list[int]) -> dict[str, Any]:
+        if breakdown_by_week and "home_week" in X_val.columns:
+            from ironclad.eval.metrics import by_week_bias
+            pred_df = pd.DataFrame({
+                "week": X_val["home_week"].values,
+                "home_margin_actual": y_val["home_margin"].values,
+                "home_margin_pred": margin_pred,
+                "home_win_actual": labels,
+                "home_win_prob": probs,
+            })
+            week_bias = by_week_bias(pred_df)
+            week_rows = []
+            for _, row in week_bias.iterrows():
+                w = int(row["week"])
+                mask = pred_df["week"] == w
+                wg = pred_df[mask]
+                wll = round(log_loss(wg["home_win_actual"], wg["home_win_prob"], labels=[0, 1]), 4) if len(wg) >= 2 else None
+                week_rows.append({
+                    "week": w,
+                    "n_games": int(row["n_games"]),
+                    "log_loss": wll,
+                    "margin_mae": float(row["margin_mae"]),
+                    "margin_bias": float(row["margin_bias"]),
+                })
+            result["by_week"] = week_rows
+
+        return result
+
+    def evaluate(self, val_seasons: list[int], breakdown_by_week: bool = False) -> dict[str, Any]:
         """Evaluate all trained models on held-out seasons."""
         X_val, y_val = self._load_team_data(val_seasons)
         if X_val.empty:
@@ -278,7 +306,7 @@ class ModelTrainer:
 
         try:
             model = self._registry.load("game_outcome")
-            metrics = self._eval_game_outcome(model, X_val, y_val)
+            metrics = self._eval_game_outcome(model, X_val, y_val, breakdown_by_week=breakdown_by_week)
             logger.info("Evaluation metrics: %s", metrics)
             return metrics
         except FileNotFoundError:

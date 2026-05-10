@@ -227,7 +227,9 @@ def dashboard(run_id) -> None:
 @cli.command()
 @click.option("--val-seasons", default="2025",
               help="Seasons to evaluate against (comma-separated or range)")
-def evaluate(val_seasons) -> None:
+@click.option("--breakdown-by-week", is_flag=True, default=False,
+              help="Show per-week log-loss and margin MAE breakdown.")
+def evaluate(val_seasons, breakdown_by_week) -> None:
     """Evaluate trained models against held-out seasons."""
     val_list = _parse_seasons(val_seasons)
     if not val_list:
@@ -237,14 +239,27 @@ def evaluate(val_seasons) -> None:
     click.echo(f"Evaluating on seasons: {val_list}")
     from ironclad.models.trainer import ModelTrainer
     trainer = ModelTrainer()
-    metrics = trainer.evaluate(val_list)
+    metrics = trainer.evaluate(val_list, breakdown_by_week=breakdown_by_week)
 
-    if metrics:
-        click.echo("\nEvaluation metrics:")
-        for k, v in metrics.items():
-            click.echo(f"  {k}: {v}")
-    else:
+    if not metrics:
         click.echo("No metrics available (run ironclad train first)")
+        return
+
+    by_week = metrics.pop("by_week", None)
+    click.echo("\nEvaluation metrics:")
+    for k, v in metrics.items():
+        click.echo(f"  {k}: {v}")
+
+    if by_week:
+        click.echo("\nPer-week breakdown:")
+        click.echo(f"  {'Wk':>2}  {'Games':>5}  {'Log-loss':>9}  {'Margin MAE':>10}  {'Margin Bias':>11}")
+        click.echo(f"  {'--':>2}  {'-----':>5}  {'---------':>9}  {'----------':>10}  {'-----------':>11}")
+        for row in by_week:
+            ll = f"{row['log_loss']:.4f}" if row["log_loss"] is not None else "   —    "
+            click.echo(
+                f"  {row['week']:>2}  {row['n_games']:>5}  {ll:>9}"
+                f"  {row['margin_mae']:>10.2f}  {row['margin_bias']:>+11.2f}"
+            )
 
 
 def _parse_seasons(spec: str) -> list[int]:
