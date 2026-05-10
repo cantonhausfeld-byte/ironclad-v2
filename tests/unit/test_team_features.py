@@ -119,6 +119,12 @@ def test_surface_grass_taken_from_home_side():
     assert bool(Xf["surface_grass"].iloc[0]) is True
 
 
+def test_turnover_diff_computed_from_prefixed_cols():
+    X = pd.DataFrame([{"home_off_turnovers_l4": 2.5, "away_off_turnovers_l4": 1.0}])
+    Xf = _build_diff_features(X)
+    assert Xf["turnover_diff"].iloc[0] == pytest.approx(1.5, abs=1e-6)
+
+
 # ── TeamFeatureBuilder integration (in-memory DB) ─────────────────────────────
 
 def test_team_feature_builder_empty_game(tmp_path):

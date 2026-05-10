@@ -81,6 +81,27 @@ class FeatureSnapshot:
         df = df[(df["player_id"] == player_id) & (df["season"] == season) & (df["week"] < week)]
         return df.sort_values("week").tail(n)
 
+    def player_recent_ngs(self, player_id: str, stat_type: str, season: int, week: int, n: int = 4) -> pd.DataFrame:
+        """Last n NGS rows for a player prior to (season, week).
+
+        NGS data has no game_id, so cutoff is enforced via (season, week) ordering.
+        """
+        if "bronze.ngs_data" not in self._cache:
+            try:
+                self._cache["bronze.ngs_data"] = self.reader.read_table("bronze.ngs_data")
+            except Exception:
+                self._cache["bronze.ngs_data"] = pd.DataFrame()
+        ngs = self._cache["bronze.ngs_data"]
+        if ngs.empty:
+            return ngs
+        df = ngs[(ngs["player_id"] == player_id) & (ngs["stat_type"] == stat_type)].copy()
+        # Exclude current and future weeks; earlier seasons sort before current
+        df = df[
+            (df["season"] < season) |
+            ((df["season"] == season) & (df["week"] < week))
+        ]
+        return df.sort_values(["season", "week"]).tail(n)
+
     # ── Game context ──────────────────────────────────────────────────────────
 
     def game_row(self, game_id: str) -> pd.Series | None:

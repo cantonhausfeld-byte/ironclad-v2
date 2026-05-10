@@ -179,6 +179,13 @@ class PlayerFeatureBuilder:
                 return default
             return own_feats.iloc[0].get(col, default)
 
+        # NGS tracking features (L4 avg)
+        season = int(game["season"])
+        week = int(game["week"])
+        ngs_recv = _ngs_avg(snap.player_recent_ngs(pid, "receiving", season, week))
+        ngs_rush = _ngs_avg(snap.player_recent_ngs(pid, "rushing",   season, week))
+        ngs_pass = _ngs_avg(snap.player_recent_ngs(pid, "passing",   season, week))
+
         availability = float(player.get("availability", AVAILABILITY_DEFAULT))
         depth_team = player.get("depth_team")
 
@@ -216,6 +223,10 @@ class PlayerFeatureBuilder:
             "team_off_pass_rate_l4":    own_feat("off_pass_rate_l4"),
             "team_off_epa_l4":          own_feat("off_epa_per_play_l4"),
             "team_implied_total":       own_feat("implied_total_from_odds"),
+            # NGS tracking
+            "ngs_avg_separation":                   ngs_recv.get("avg_separation"),
+            "ngs_rush_yards_over_expected":         ngs_rush.get("rush_yards_over_expected"),
+            "ngs_completion_pct_above_expected":    ngs_pass.get("completion_percentage_above_expectation"),
             # Targets filled post-game
             "target_targets": None, "target_carries": None,
             "target_receptions": None, "target_rec_yards": None,
@@ -223,6 +234,13 @@ class PlayerFeatureBuilder:
             "data_completeness_score": min(1.0, n_games / ROLLING_WINDOW),
         }
         return feature_row
+
+
+def _ngs_avg(df: pd.DataFrame) -> dict:
+    """Return column-wise means from an NGS DataFrame, as a plain dict."""
+    if df.empty:
+        return {}
+    return {col: float(df[col].dropna().mean()) for col in df.columns if df[col].notna().any()}
 
 
 def _avg_col(df: pd.DataFrame, col: str, default=None):

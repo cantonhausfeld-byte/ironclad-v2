@@ -172,6 +172,9 @@ class TeamFeatureBuilder:
             # Season-to-date
             "off_epa_per_play_std":   std("epa_per_play",   "off_epa_per_play"),
             "def_epa_per_play_std":   def_from_opp("epa_per_play",  "def_epa_per_play"),
+            # Turnovers (rolling L4)
+            "off_turnovers_l4":          off("turnovers",  default=1.5),
+            "def_turnovers_forced_l4":   def_from_opp("turnovers", default=1.5),
             # Context
             "rest_days":              rest_days,
             "is_divisional":          None,

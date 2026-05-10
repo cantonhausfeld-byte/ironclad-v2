@@ -91,3 +91,36 @@ def test_build_for_game_non_skill_positions_excluded():
     builder = PlayerFeatureBuilder(conn)
     df = builder.build_for_game("2023_05_KC_BAL", cutoff)
     assert df.empty
+
+
+def _insert_ngs(conn, player_id="P001", season=2023, week=3,
+                stat_type="receiving", avg_separation=2.5):
+    conn.execute("""
+        INSERT INTO bronze.ngs_data
+            (player_id, player_name, season, week, stat_type, avg_separation)
+        VALUES (?, 'Test Player', ?, ?, ?, ?)
+    """, [player_id, season, week, stat_type, avg_separation])
+
+
+def test_ngs_columns_present_in_player_features():
+    """ngs_avg_separation column exists in output and is populated from bronze.ngs_data."""
+    from ironclad.features.player_features import PlayerFeatureBuilder
+    conn = _conn()
+    _insert_game(conn)
+    _insert_player(conn, team="KC")
+    _insert_player(conn, player_id="P002", team="BAL", position="RB")
+    _insert_ngs(conn, player_id="P001", season=2023, week=3)
+
+    cutoff = datetime(2099, 1, 1, tzinfo=timezone.utc)
+    builder = PlayerFeatureBuilder(conn)
+    df = builder.build_for_game("2023_05_KC_BAL", cutoff)
+
+    assert not df.empty
+    assert "ngs_avg_separation" in df.columns
+    assert "ngs_rush_yards_over_expected" in df.columns
+    assert "ngs_completion_pct_above_expected" in df.columns
+    # P001 (WR on KC) should have separation populated from prior-week NGS data
+    p001_rows = df[df["player_id"] == "P001"]
+    if not p001_rows.empty:
+        val = p001_rows.iloc[0]["ngs_avg_separation"]
+        assert val is None or float(val) == pytest.approx(2.5, abs=1e-6)

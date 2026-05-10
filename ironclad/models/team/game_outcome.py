@@ -40,6 +40,7 @@ TEAM_FEATURES = [
     "pass_rate_diff",
     "success_rate_diff",
     "points_pg_diff",
+    "turnover_diff",
     # Phase 2A: situational features
     "cpoe_diff",
     "neutral_epa_diff",
@@ -214,6 +215,7 @@ def _build_diff_features(X: pd.DataFrame) -> pd.DataFrame:
         ("pass_rate_diff",      "off_pass_rate_l4",        None),
         ("success_rate_diff",   "off_success_rate_l4",     None),
         ("points_pg_diff",      "off_points_per_game_l4",  None),
+        ("turnover_diff",       "off_turnovers_l4",        None),
         # Phase 2A: situational features
         ("cpoe_diff",           "off_cpoe_l4",             None),
         ("neutral_epa_diff",    "off_neutral_epa_l4",      None),

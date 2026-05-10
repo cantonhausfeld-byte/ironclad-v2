@@ -103,6 +103,11 @@ class BronzeWriter(_BaseWriter):
         df["_ingest_ts"] = _now()
         return self._upsert(df, "bronze.player_stats_weekly", ["season", "week", "player_id"])
 
+    def write_ngs_data(self, df: pd.DataFrame) -> int:
+        df = df.copy()
+        df["_ingest_ts"] = _now()
+        return self._upsert(df, "bronze.ngs_data", ["player_id", "season", "week", "stat_type"])
+
 
 class SilverWriter(_BaseWriter):
     def write_games(self, df: pd.DataFrame) -> int:
