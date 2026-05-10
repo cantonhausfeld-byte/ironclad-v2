@@ -59,6 +59,14 @@ TEAM_FEATURES = [
     "implied_total_from_odds",
     "spread_from_odds",
     "home_win_prob_from_odds",
+    # Phase 2B: season-to-date EPA, red zone, bye week, surface
+    "off_epa_std_diff",
+    "def_epa_std_diff",
+    "off_epa_rz_diff",
+    "def_epa_rz_diff",
+    "home_is_post_bye",
+    "away_is_post_bye",
+    "surface_grass",
 ]
 
 # Win-probability classifier omits home_win_prob_from_odds to avoid circular dependency.
@@ -239,6 +247,7 @@ def _build_diff_features(X: pd.DataFrame) -> pd.DataFrame:
         ("implied_total_from_odds", LEAGUE_AVG_TOTAL),
         ("spread_from_odds", 0.0),
         ("home_win_prob_from_odds", LEAGUE_HOME_WIN_PROB),
+        ("surface_grass", False),
     ]:
         # Training data has home_/away_ prefixes — try home-side first
         home_col = f"home_{col}"
@@ -248,6 +257,28 @@ def _build_diff_features(X: pd.DataFrame) -> pd.DataFrame:
             elif col not in out.columns:
                 out[col] = default
         out[col] = pd.to_numeric(out[col], errors="coerce").fillna(default)
+
+    # Phase 2B: season-to-date EPA diffs
+    for diff_col, feat_col in [
+        ("off_epa_std_diff", "off_epa_per_play_std"),
+        ("def_epa_std_diff", "def_epa_per_play_std"),
+        ("off_epa_rz_diff",  "off_epa_rz_l4"),
+        ("def_epa_rz_diff",  "def_epa_rz_l4"),
+    ]:
+        home_col = f"home_{feat_col}"
+        away_col = f"away_{feat_col}"
+        if home_col in X.columns and away_col in X.columns:
+            out[diff_col] = X[home_col].fillna(0) - X[away_col].fillna(0)
+        elif feat_col in X.columns:
+            out[diff_col] = X[feat_col].fillna(0)
+        else:
+            out[diff_col] = 0.0
+
+    # Phase 2B: post-bye flags (rest_days >= 14 means team had a bye week)
+    home_rest = pd.to_numeric(out.get("home_rest_days", 7), errors="coerce").fillna(7)
+    away_rest = pd.to_numeric(out.get("away_rest_days", 7), errors="coerce").fillna(7)
+    out["home_is_post_bye"] = (home_rest >= 14).astype(int)
+    out["away_is_post_bye"] = (away_rest >= 14).astype(int)
 
     return out
 
