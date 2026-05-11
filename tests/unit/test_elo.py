@@ -141,3 +141,10 @@ def test_yards_per_play_diff_in_build_diff_features():
     X = pd.DataFrame([{"home_off_yards_per_play_l4": 5.8, "away_off_yards_per_play_l4": 5.2}])
     Xf = _build_diff_features(X)
     assert Xf["yards_per_play_diff"].iloc[0] == pytest.approx(0.6, abs=1e-4)
+
+
+def test_def_epa_pass_early_diff_in_build_diff_features():
+    from ironclad.models.team.game_outcome import _build_diff_features
+    X = pd.DataFrame([{"home_def_epa_pass_early_l4": 0.12, "away_def_epa_pass_early_l4": 0.08}])
+    Xf = _build_diff_features(X)
+    assert Xf["def_epa_pass_early_diff"].iloc[0] == pytest.approx(0.04, abs=1e-4)

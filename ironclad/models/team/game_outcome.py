@@ -80,6 +80,9 @@ TEAM_FEATURES = [
     "def_third_down_pct_diff",
     "def_turnovers_forced_diff",
     "yards_per_play_diff",
+    "def_epa_pass_early_diff",
+    "def_sack_rate_diff",
+    "fourth_down_att_diff",
 ]
 
 # Win-probability classifier omits home_win_prob_from_odds to avoid circular dependency.
@@ -259,6 +262,9 @@ def _build_diff_features(X: pd.DataFrame) -> pd.DataFrame:
         ("def_third_down_pct_diff",  "def_third_down_pct_l4",  None),
         ("def_turnovers_forced_diff","def_turnovers_forced_l4",None),
         ("yards_per_play_diff",      "off_yards_per_play_l4",  None),
+        ("def_epa_pass_early_diff",  "def_epa_pass_early_l4",  None),
+        ("def_sack_rate_diff",       "def_sack_rate_l4",       None),
+        ("fourth_down_att_diff",     "off_fourth_down_att_l4", None),
     ]
     # If input has home_ / away_ prefix form (from training loader):
     for diff_col, feat_col, _ in pairs:
