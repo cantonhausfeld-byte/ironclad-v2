@@ -125,3 +125,19 @@ def test_game_week_default_when_absent():
     X = pd.DataFrame([{}])
     Xf = _build_diff_features(X)
     assert Xf["game_week"].iloc[0] == pytest.approx(9.0)
+
+
+# ── Phase 2G: defense-side diffs ─────────────────────────────────────────────
+
+def test_def_success_rate_diff_in_build_diff_features():
+    from ironclad.models.team.game_outcome import _build_diff_features
+    X = pd.DataFrame([{"home_def_success_rate_l4": 0.38, "away_def_success_rate_l4": 0.45}])
+    Xf = _build_diff_features(X)
+    assert Xf["def_success_rate_diff"].iloc[0] == pytest.approx(0.38 - 0.45, abs=1e-4)
+
+
+def test_yards_per_play_diff_in_build_diff_features():
+    from ironclad.models.team.game_outcome import _build_diff_features
+    X = pd.DataFrame([{"home_off_yards_per_play_l4": 5.8, "away_off_yards_per_play_l4": 5.2}])
+    Xf = _build_diff_features(X)
+    assert Xf["yards_per_play_diff"].iloc[0] == pytest.approx(0.6, abs=1e-4)

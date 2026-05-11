@@ -71,6 +71,15 @@ TEAM_FEATURES = [
     # Phase 2E: Elo team rating + game week
     "elo_diff",
     "game_week",
+    # Phase 2G: defense-side feature completion
+    "def_success_rate_diff",
+    "def_cpoe_allowed_diff",
+    "def_neutral_epa_diff",
+    "def_epa_rush_early_diff",
+    "def_epa_third_down_diff",
+    "def_third_down_pct_diff",
+    "def_turnovers_forced_diff",
+    "yards_per_play_diff",
 ]
 
 # Win-probability classifier omits home_win_prob_from_odds to avoid circular dependency.
@@ -241,6 +250,15 @@ def _build_diff_features(X: pd.DataFrame) -> pd.DataFrame:
         ("epa_rush_early_diff", "off_epa_rush_early_l4",   None),
         ("epa_third_down_diff", "off_epa_third_down_l4",   None),
         ("third_down_pct_diff", "off_third_down_pct_l4",   None),
+        # Phase 2G: defense-side completions
+        ("def_success_rate_diff",    "def_success_rate_l4",    None),
+        ("def_cpoe_allowed_diff",    "def_cpoe_allowed_l4",    None),
+        ("def_neutral_epa_diff",     "def_neutral_epa_l4",     None),
+        ("def_epa_rush_early_diff",  "def_epa_rush_early_l4",  None),
+        ("def_epa_third_down_diff",  "def_epa_third_down_l4",  None),
+        ("def_third_down_pct_diff",  "def_third_down_pct_l4",  None),
+        ("def_turnovers_forced_diff","def_turnovers_forced_l4",None),
+        ("yards_per_play_diff",      "off_yards_per_play_l4",  None),
     ]
     # If input has home_ / away_ prefix form (from training loader):
     for diff_col, feat_col, _ in pairs:
