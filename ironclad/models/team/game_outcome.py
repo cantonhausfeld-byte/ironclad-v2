@@ -81,10 +81,28 @@ class GameOutcomeModel(BaseModel):
     name = "game_outcome"
     version = "v1.0"
 
-    def __init__(self) -> None:
-        self._clf: XGBClassifier | None = None      # home_win classification
-        self._reg_margin: XGBRegressor | None = None # home_margin regression
-        self._reg_total: XGBRegressor | None = None  # total_score regression
+    def __init__(
+        self, *,
+        n_estimators: int = 300,
+        learning_rate: float = 0.05,
+        max_depth: int = 4,
+        subsample: float = 0.8,
+        colsample_bytree: float = 0.8,
+        min_child_weight: int = 1,
+        gamma: float = 0.0,
+    ) -> None:
+        self._hp = dict(
+            n_estimators=n_estimators,
+            learning_rate=learning_rate,
+            max_depth=max_depth,
+            subsample=subsample,
+            colsample_bytree=colsample_bytree,
+            min_child_weight=min_child_weight,
+            gamma=gamma,
+        )
+        self._clf: XGBClassifier | None = None
+        self._reg_margin: XGBRegressor | None = None
+        self._reg_total: XGBRegressor | None = None
         self._calibrator = PlattCalibrator()
         self._margin_std = _MARGIN_STD
         self._total_std = _TOTAL_STD
@@ -102,23 +120,20 @@ class GameOutcomeModel(BaseModel):
         y_total = y["total_score"].astype(float)
 
         self._clf = XGBClassifier(
-            n_estimators=300, learning_rate=0.05, max_depth=4,
-            subsample=0.8, colsample_bytree=0.8,
+            **self._hp,
             eval_metric="logloss",
             random_state=42, n_jobs=-1,
         )
         self._clf.fit(Xm_clf, y_win)
 
         self._reg_margin = XGBRegressor(
-            n_estimators=300, learning_rate=0.05, max_depth=4,
-            subsample=0.8, colsample_bytree=0.8,
+            **self._hp,
             random_state=42, n_jobs=-1,
         )
         self._reg_margin.fit(Xm_reg, y_margin)
 
         self._reg_total = XGBRegressor(
-            n_estimators=300, learning_rate=0.05, max_depth=4,
-            subsample=0.8, colsample_bytree=0.8,
+            **self._hp,
             random_state=42, n_jobs=-1,
         )
         self._reg_total.fit(Xm_reg, y_total)
