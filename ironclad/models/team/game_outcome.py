@@ -68,6 +68,9 @@ TEAM_FEATURES = [
     "home_is_post_bye",
     "away_is_post_bye",
     "surface_grass",
+    # Phase 2E: Elo team rating + game week
+    "elo_diff",
+    "game_week",
 ]
 
 # Win-probability classifier omits home_win_prob_from_odds to avoid circular dependency.
@@ -296,6 +299,24 @@ def _build_diff_features(X: pd.DataFrame) -> pd.DataFrame:
     away_rest = pd.to_numeric(out.get("away_rest_days", 7), errors="coerce").fillna(7)
     out["home_is_post_bye"] = (home_rest >= 14).astype(int)
     out["away_is_post_bye"] = (away_rest >= 14).astype(int)
+
+    # Phase 2E: Elo diff (home_elo_pre_game - away_elo_pre_game)
+    home_elo_col = "home_elo_pre_game"
+    away_elo_col = "away_elo_pre_game"
+    if home_elo_col in X.columns and away_elo_col in X.columns:
+        out["elo_diff"] = X[home_elo_col].fillna(1500) - X[away_elo_col].fillna(1500)
+    elif "elo_pre_game" in X.columns:
+        out["elo_diff"] = X["elo_pre_game"].fillna(0)
+    else:
+        out["elo_diff"] = 0.0
+
+    # Phase 2E: game week (same for both teams — raw week number, not a diff)
+    if "home_week" in X.columns:
+        out["game_week"] = pd.to_numeric(X["home_week"], errors="coerce").fillna(9)
+    elif "week" in X.columns:
+        out["game_week"] = pd.to_numeric(X["week"], errors="coerce").fillna(9)
+    else:
+        out["game_week"] = 9.0
 
     return out
 

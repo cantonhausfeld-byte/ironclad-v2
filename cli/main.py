@@ -313,6 +313,25 @@ def _parse_seasons(spec: str) -> list[int]:
 # ── odds ──────────────────────────────────────────────────────────────────────
 
 @cli.command()
+def elo() -> None:
+    """Compute Elo team ratings for all seasons and write to gold.elo_ratings.
+
+    Run this after backfilling silver data. Ratings are computed chronologically
+    through all completed games and stored as pre/post-game ratings per team.
+    """
+    from ironclad.features.elo import EloComputer
+    from ironclad.store.connection import get_connection
+    from ironclad.store.schema import create_all_tables
+
+    conn = get_connection()
+    create_all_tables(conn)
+
+    click.echo("Computing Elo ratings for all seasons...")
+    n = EloComputer(conn).compute_and_write()
+    click.echo(f"Wrote {n} Elo rating rows to gold.elo_ratings.")
+
+
+@cli.command()
 def odds() -> None:
     """Fetch this week's game odds and player props from The Odds API.
 

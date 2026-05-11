@@ -140,6 +140,10 @@ class GoldWriter(_BaseWriter):
         df = df.copy()
         return self._upsert(df, "gold.player_game_features", ["game_id", "player_id"])
 
+    def write_elo_ratings(self, df: pd.DataFrame) -> int:
+        df = df.copy()
+        return self._upsert(df, "gold.elo_ratings", ["game_id", "team"])
+
     def write_prediction(self, df: pd.DataFrame) -> int:
         df = df.copy()
         return self._upsert(df, "gold.model_predictions", ["prediction_id"])

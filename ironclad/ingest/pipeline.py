@@ -89,6 +89,14 @@ class IngestPipeline:
             logger.info("=== Ingesting weather ===")
             counts["weather"] = self._ingest_weather()
 
+        logger.info("=== Computing Elo ratings ===")
+        try:
+            from ironclad.features.elo import EloComputer
+            counts["elo_ratings"] = EloComputer(self._conn).compute_and_write()
+        except Exception as exc:
+            logger.warning("Elo computation failed (non-fatal): %s", exc)
+            counts["elo_ratings"] = 0
+
         logger.info("Ingest complete: %s", counts)
         return counts
 

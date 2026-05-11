@@ -102,6 +102,7 @@ class TeamFeatureBuilder:
             return float(vals.mean()) if len(vals) else d
 
         rest_days = _compute_rest_days(team, game, snap)
+        elo = _lookup_elo(game["game_id"], team, self._conn)
 
         # Odds context
         implied_total = game.get("total_consensus")
@@ -175,6 +176,8 @@ class TeamFeatureBuilder:
             # Turnovers (rolling L4)
             "off_turnovers_l4":          off("turnovers",  default=1.5),
             "def_turnovers_forced_l4":   def_from_opp("turnovers", default=1.5),
+            # Elo (pre-game rating from gold.elo_ratings)
+            "elo_pre_game":              elo,
             # Context
             "rest_days":              rest_days,
             "is_divisional":          None,
@@ -213,6 +216,17 @@ def _surface_grass(surface) -> bool | None:
     if surface is None:
         return None
     return "grass" in str(surface).lower()
+
+
+def _lookup_elo(game_id: str, team: str, conn) -> float | None:
+    try:
+        row = conn.execute(
+            "SELECT elo_pre_game FROM gold.elo_ratings WHERE game_id = ? AND team = ?",
+            [game_id, team],
+        ).fetchone()
+        return float(row[0]) if row else None
+    except Exception:
+        return None
 
 
 def _parse_kickoff(gameday, gametime_local) -> datetime:

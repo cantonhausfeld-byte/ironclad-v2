@@ -469,6 +469,8 @@ def _gold(conn: duckdb.DuckDBPyConnection) -> None:
         -- Turnovers (rolling L4)
         off_turnovers_l4         FLOAT,
         def_turnovers_forced_l4  FLOAT,
+        -- Elo
+        elo_pre_game             FLOAT,
         -- Context
         rest_days                INTEGER,
         is_divisional            BOOLEAN,
@@ -613,6 +615,18 @@ def _gold(conn: duckdb.DuckDBPyConnection) -> None:
     """)
 
     conn.execute("""
+    CREATE TABLE IF NOT EXISTS gold.elo_ratings (
+        game_id        VARCHAR NOT NULL,
+        team           VARCHAR NOT NULL,
+        season         INTEGER NOT NULL,
+        week           INTEGER NOT NULL,
+        elo_pre_game   FLOAT   NOT NULL,
+        elo_post_game  FLOAT   NOT NULL,
+        PRIMARY KEY (game_id, team)
+    )
+    """)
+
+    conn.execute("""
     CREATE TABLE IF NOT EXISTS gold.betting_results (
         result_id     VARCHAR NOT NULL,
         edge_id       VARCHAR,
@@ -694,6 +708,7 @@ _EXPECTED_COLS: dict[str, list[tuple[str, str]]] = {
         ("off_fourth_down_att_l4","FLOAT"),
         ("off_turnovers_l4",         "FLOAT"),
         ("def_turnovers_forced_l4",  "FLOAT"),
+        ("elo_pre_game",             "FLOAT"),
     ],
     "gold.player_game_features": [
         ("adot_l4",                               "FLOAT"),
