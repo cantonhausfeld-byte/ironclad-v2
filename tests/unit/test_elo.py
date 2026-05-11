@@ -148,3 +148,27 @@ def test_def_epa_pass_early_diff_in_build_diff_features():
     X = pd.DataFrame([{"home_def_epa_pass_early_l4": 0.12, "away_def_epa_pass_early_l4": 0.08}])
     Xf = _build_diff_features(X)
     assert Xf["def_epa_pass_early_diff"].iloc[0] == pytest.approx(0.04, abs=1e-4)
+
+
+# ── Phase 2H: momentum features ──────────────────────────────────────────────
+
+def test_off_epa_momentum_diff_in_build_diff_features():
+    """Momentum = (home_L1 - home_L4) - (away_L1 - away_L4)."""
+    from ironclad.models.team.game_outcome import _build_diff_features
+    X = pd.DataFrame([{
+        "home_off_epa_per_play_l1": 0.20,
+        "home_off_epa_per_play_l4": 0.10,
+        "away_off_epa_per_play_l1": 0.05,
+        "away_off_epa_per_play_l4": 0.10,
+    }])
+    Xf = _build_diff_features(X)
+    # home trending up +0.10, away trending down -0.05 → diff = 0.15
+    assert Xf["off_epa_momentum_diff"].iloc[0] == pytest.approx(0.15, abs=1e-4)
+
+
+def test_momentum_diff_defaults_zero_when_absent():
+    """When L1 columns are absent the momentum diff should be 0."""
+    from ironclad.models.team.game_outcome import _build_diff_features
+    X = pd.DataFrame([{}])
+    Xf = _build_diff_features(X)
+    assert Xf["off_epa_momentum_diff"].iloc[0] == pytest.approx(0.0, abs=1e-4)

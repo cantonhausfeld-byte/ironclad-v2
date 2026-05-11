@@ -68,6 +68,7 @@ class TeamFeatureBuilder:
         week = int(game["week"])
 
         recent = snap.team_recent_games(team, n=ROLLING_WINDOW)
+        recent_l1 = snap.team_recent_games(team, n=1)
         season_games = snap.team_season_games(team, season)
 
         # ── Offense rolling L4 ────────────────────────────────────────────────
@@ -173,6 +174,9 @@ class TeamFeatureBuilder:
             # Season-to-date
             "off_epa_per_play_std":   std("epa_per_play",   "off_epa_per_play"),
             "def_epa_per_play_std":   def_from_opp("epa_per_play",  "def_epa_per_play"),
+            # Last-1-game EPA (momentum signal)
+            "off_epa_per_play_l1":    _off_l1("epa_per_play", recent_l1),
+            "def_epa_per_play_l1":    _def_l1_from_opp("epa_per_play", recent_l1, snap, team),
             # Turnovers (rolling L4)
             "off_turnovers_l4":          off("turnovers",  default=1.5),
             "def_turnovers_forced_l4":   def_from_opp("turnovers", default=1.5),
@@ -199,6 +203,27 @@ class TeamFeatureBuilder:
             "data_completeness_score": completeness,
         }
         return feature_row
+
+
+def _off_l1(col: str, recent_l1: pd.DataFrame, default: float = 0.0) -> float | None:
+    if recent_l1.empty or col not in recent_l1.columns:
+        return None
+    vals = recent_l1[col].dropna()
+    return float(vals.iloc[0]) if len(vals) else None
+
+
+def _def_l1_from_opp(col: str, recent_l1: pd.DataFrame, snap, team: str, default: float = 0.0) -> float | None:
+    if recent_l1.empty:
+        return None
+    all_stats = snap.reader.read_table("silver.team_game_stats")
+    opp_rows = all_stats[
+        all_stats["game_id"].isin(recent_l1["game_id"]) &
+        (all_stats["opponent"] == team)
+    ]
+    if opp_rows.empty or col not in opp_rows.columns:
+        return None
+    vals = opp_rows[col].dropna()
+    return float(vals.iloc[0]) if len(vals) else None
 
 
 def _compute_rest_days(team: str, game: pd.Series, snap: FeatureSnapshot) -> int | None:

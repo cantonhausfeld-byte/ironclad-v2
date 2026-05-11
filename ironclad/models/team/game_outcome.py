@@ -71,6 +71,9 @@ TEAM_FEATURES = [
     # Phase 2E: Elo team rating + game week
     "elo_diff",
     "game_week",
+    # Phase 2H: momentum (last-1-game vs L4 trend)
+    "off_epa_momentum_diff",
+    "def_epa_momentum_diff",
     # Phase 2G: defense-side feature completion
     "def_success_rate_diff",
     "def_cpoe_allowed_diff",
@@ -341,6 +344,18 @@ def _build_diff_features(X: pd.DataFrame) -> pd.DataFrame:
         out["game_week"] = pd.to_numeric(X["week"], errors="coerce").fillna(9)
     else:
         out["game_week"] = 9.0
+
+    # Phase 2H: momentum = (L1 - L4) for home minus (L1 - L4) for away
+    # Positive means home is trending up relative to away
+    for momentum_col, l1_col, l4_col in [
+        ("off_epa_momentum_diff", "off_epa_per_play_l1", "off_epa_per_play_l4"),
+        ("def_epa_momentum_diff", "def_epa_per_play_l1", "def_epa_per_play_l4"),
+    ]:
+        home_l1 = pd.to_numeric(X.get(f"home_{l1_col}", pd.Series(0, index=X.index)), errors="coerce").fillna(0)
+        home_l4 = pd.to_numeric(X.get(f"home_{l4_col}", pd.Series(0, index=X.index)), errors="coerce").fillna(0)
+        away_l1 = pd.to_numeric(X.get(f"away_{l1_col}", pd.Series(0, index=X.index)), errors="coerce").fillna(0)
+        away_l4 = pd.to_numeric(X.get(f"away_{l4_col}", pd.Series(0, index=X.index)), errors="coerce").fillna(0)
+        out[momentum_col] = (home_l1 - home_l4) - (away_l1 - away_l4)
 
     return out
 

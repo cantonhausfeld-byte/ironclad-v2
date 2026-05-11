@@ -466,6 +466,9 @@ def _gold(conn: duckdb.DuckDBPyConnection) -> None:
         -- Season-to-date
         off_epa_per_play_std     FLOAT,
         def_epa_per_play_std     FLOAT,
+        -- Last-1-game (momentum)
+        off_epa_per_play_l1      FLOAT,
+        def_epa_per_play_l1      FLOAT,
         -- Turnovers (rolling L4)
         off_turnovers_l4         FLOAT,
         def_turnovers_forced_l4  FLOAT,
@@ -709,6 +712,8 @@ _EXPECTED_COLS: dict[str, list[tuple[str, str]]] = {
         ("off_turnovers_l4",         "FLOAT"),
         ("def_turnovers_forced_l4",  "FLOAT"),
         ("elo_pre_game",             "FLOAT"),
+        ("off_epa_per_play_l1",      "FLOAT"),
+        ("def_epa_per_play_l1",      "FLOAT"),
     ],
     "gold.player_game_features": [
         ("adot_l4",                               "FLOAT"),
