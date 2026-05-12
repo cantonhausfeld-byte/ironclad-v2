@@ -270,6 +270,42 @@ class ModelTrainer:
             "val_total_mae": round(mean_absolute_error(y_val["total_score"].values, total_pred), 2),
         }
 
+    def train_ensemble(
+        self,
+        train_seasons: list[int],
+        val_seasons: list[int] | None = None,
+    ) -> dict[str, Any]:
+        """Train the ensemble meta-learner. XGB and LightGBM must be pre-trained."""
+        from ironclad.models.team.ensemble import GameOutcomeEnsemble
+        logger.info("Training GameOutcomeEnsemble on seasons %s", train_seasons)
+        X_train, y_train = self._load_team_data(train_seasons)
+        if X_train.empty:
+            logger.warning("No team feature data found for %s", train_seasons)
+            return {}
+
+        model = GameOutcomeEnsemble()
+        model.fit(X_train, y_train)
+
+        metrics: dict[str, Any] = {"train_rows": len(X_train)}
+
+        if val_seasons:
+            X_val, y_val = self._load_team_data(val_seasons)
+            if not X_val.empty:
+                raw_probs = np.array([
+                    model._meta.predict_proba(model._base_preds(X_val.iloc[[i]])[0])[:, 1][0]
+                    for i in range(len(X_val))
+                ])
+                labels = y_val["home_win"].astype(int).values
+                model.calibrate_from_probs(raw_probs, labels)
+                cal_probs = np.clip(model._calibrator.transform(raw_probs), 0.02, 0.98)
+                metrics["val_log_loss"] = round(log_loss(labels, cal_probs), 4)
+                metrics["val_brier"] = round(brier_score_loss(labels, cal_probs), 4)
+                logger.info("Ensemble val metrics: %s", metrics)
+
+        self._registry.save(model, metrics)
+        logger.info("GameOutcomeEnsemble saved. Metrics: %s", metrics)
+        return metrics
+
     def evaluate(self, val_seasons: list[int]) -> dict[str, Any]:
         """Evaluate all trained models on held-out seasons."""
         X_val, y_val = self._load_team_data(val_seasons)

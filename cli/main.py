@@ -130,7 +130,8 @@ def _lookup_game_id(home: str, away: str, week: int, season: int) -> str | None:
 @click.option("--val-seasons", default="2025",
               help="Season range for validation/calibration")
 @click.option("--model", default="all",
-              type=click.Choice(["all", "game-outcome", "score-env", "player-usage", "player-efficiency"]),
+              type=click.Choice(["all", "game-outcome", "game-outcome-lgbm", "score-env",
+                                 "player-usage", "player-efficiency", "ensemble"]),
               help="Which model(s) to train")
 def train(train_seasons, val_seasons, model) -> None:
     """Train ML models on backfilled historical data."""
@@ -148,12 +149,16 @@ def train(train_seasons, val_seasons, model) -> None:
         metrics = trainer.train_all(train_list, val_list or None)
     elif model == "game-outcome":
         metrics = {"game_outcome": trainer.train_game_outcome(train_list, val_list or None)}
+    elif model == "game-outcome-lgbm":
+        metrics = {"game_outcome_lgbm": trainer.train_game_outcome(train_list, val_list or None, use_lgbm=True)}
     elif model == "score-env":
         metrics = {"score_env": trainer.train_score_env(train_list)}
     elif model == "player-usage":
         metrics = {"player_usage": trainer.train_player_usage(train_list)}
     elif model == "player-efficiency":
         metrics = {"player_efficiency": trainer.train_player_efficiency(train_list)}
+    elif model == "ensemble":
+        metrics = {"ensemble": trainer.train_ensemble(train_list, val_list or None)}
 
     click.echo("\nTraining complete. Metrics:")
     for name, m in metrics.items():
@@ -170,8 +175,8 @@ def train(train_seasons, val_seasons, model) -> None:
 @click.option("--run-id", default=None,
               help="Optional custom run identifier")
 @click.option("--model", "model_name", default="xgb",
-              type=click.Choice(["xgb", "lgbm"]), show_default=True,
-              help="Model class: xgb (XGBoost) or lgbm (LightGBM+Optuna)")
+              type=click.Choice(["xgb", "lgbm", "ensemble"]), show_default=True,
+              help="Model class: xgb (XGBoost), lgbm (LightGBM+Optuna), or ensemble")
 def backtest(train_start, test_seasons, run_id, model_name) -> None:
     """Walk-forward backtest: train on [train_start..T-1], predict season T for each T."""
     test_list = _parse_seasons(test_seasons)
@@ -186,6 +191,9 @@ def backtest(train_start, test_seasons, run_id, model_name) -> None:
     if model_name == "lgbm":
         from ironclad.models.team.game_outcome_lgbm import GameOutcomeLGBM
         model_class = GameOutcomeLGBM
+    elif model_name == "ensemble":
+        from ironclad.models.team.ensemble import GameOutcomeEnsemble
+        model_class = GameOutcomeEnsemble
     else:
         model_class = None  # Backtester defaults to GameOutcomeModel
     bt = Backtester(model_class=model_class)
