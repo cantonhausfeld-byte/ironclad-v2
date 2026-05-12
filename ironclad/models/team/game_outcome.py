@@ -48,11 +48,6 @@ TEAM_FEATURES = [
     "epa_rush_early_diff",
     "epa_third_down_diff",
     "third_down_pct_diff",
-    "home_rest_days",
-    "away_rest_days",
-    "rest_advantage",
-    "is_divisional",
-    "altitude_ft",
     "is_dome",
     "temp_f",
     "wind_mph",
@@ -60,14 +55,11 @@ TEAM_FEATURES = [
     "implied_total_from_odds",
     "spread_from_odds",
     "home_win_prob_from_odds",
-    # Phase 2B: season-to-date EPA, red zone, bye week, surface
+    # Phase 2B: season-to-date EPA, red zone
     "off_epa_std_diff",
     "def_epa_std_diff",
     "off_epa_rz_diff",
     "def_epa_rz_diff",
-    "home_is_post_bye",
-    "away_is_post_bye",
-    "surface_grass",
     # Phase 2E: Elo team rating + game week
     "elo_diff",
     "game_week",
@@ -81,11 +73,9 @@ TEAM_FEATURES = [
     "def_epa_rush_early_diff",
     "def_epa_third_down_diff",
     "def_third_down_pct_diff",
-    "def_turnovers_forced_diff",
     "yards_per_play_diff",
     "def_epa_pass_early_diff",
     "def_sack_rate_diff",
-    "fourth_down_att_diff",
 ]
 
 # Win-probability classifier omits home_win_prob_from_odds to avoid circular dependency.
