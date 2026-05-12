@@ -344,6 +344,10 @@ def run_weekly(season, week, n_draws, kelly_fraction, min_ev, no_odds) -> None:
             click.echo(f"  - {item}")
     click.echo("\nRun `ironclad serve` to view edges in the dashboard.")
 
+    from ironclad.notifications.discord import post_run_summary
+    from ironclad.store.connection import get_connection
+    post_run_summary(result, conn=get_connection())
+
 
 # ── edges ─────────────────────────────────────────────────────────────────────
 

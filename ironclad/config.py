@@ -19,6 +19,7 @@ for _d in (DATA_DIR / "bronze", DATA_DIR / "silver", DATA_DIR / "gold",
 
 # ── API keys ───────────────────────────────────────────────────────────────────
 ODDS_API_KEY = os.environ.get("ODDS_API_KEY", "")
+DISCORD_WEBHOOK_URL: str = os.environ.get("DISCORD_WEBHOOK_URL", "")
 
 # ── Simulation defaults ────────────────────────────────────────────────────────
 DEFAULT_N_DRAWS = 5000
