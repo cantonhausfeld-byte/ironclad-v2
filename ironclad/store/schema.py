@@ -452,6 +452,8 @@ def _gold(conn: duckdb.DuckDBPyConnection) -> None:
         implied_total_from_odds  FLOAT,
         spread_from_odds         FLOAT,
         home_win_prob_from_odds  FLOAT,
+        spread_movement          FLOAT,
+        total_movement           FLOAT,
         altitude_ft              INTEGER,
         is_dome                  BOOLEAN,
         temp_f                   FLOAT,
@@ -665,6 +667,8 @@ _EXPECTED_COLS: dict[str, list[tuple[str, str]]] = {
         ("off_third_down_pct_l4", "FLOAT"),
         ("def_third_down_pct_l4", "FLOAT"),
         ("off_fourth_down_att_l4","FLOAT"),
+        ("spread_movement",       "FLOAT"),
+        ("total_movement",        "FLOAT"),
     ],
     "gold.player_game_features": [
         ("adot_l4", "FLOAT"),

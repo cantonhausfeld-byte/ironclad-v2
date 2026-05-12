@@ -102,6 +102,7 @@ class TeamFeatureBuilder:
             return float(vals.mean()) if len(vals) else d
 
         rest_days = _compute_rest_days(team, game, snap)
+        spread_movement, total_movement = _compute_line_movement(snap, game["game_id"], is_home)
 
         # Odds context
         implied_total = game.get("total_consensus")
@@ -180,6 +181,8 @@ class TeamFeatureBuilder:
                                       (-float(spread) if pd.notna(spread) else None),
             "home_win_prob_from_odds": float(home_win_prob) if (is_home and pd.notna(home_win_prob)) else
                                        (1 - float(home_win_prob) if pd.notna(home_win_prob) else None),
+            "spread_movement":        spread_movement,
+            "total_movement":         total_movement,
             "altitude_ft":            game.get("altitude_ft"),
             "is_dome":                game.get("is_dome"),
             "temp_f":                 game.get("temp_f"),
@@ -204,6 +207,45 @@ def _compute_rest_days(team: str, game: pd.Series, snap: FeatureSnapshot) -> int
     if prior.empty:
         return None
     return int((current_day - prior.iloc[-1]["gameday"]).days)
+
+
+def _compute_line_movement(
+    snap: FeatureSnapshot, game_id: str, is_home: bool
+) -> tuple[float | None, float | None]:
+    """Return (spread_movement, total_movement) from bronze.odds history.
+
+    Movement = closing value − opening value (as of cutoff_ts).
+    spread_movement is from the home team's perspective.
+    Returns (None, None) if fewer than 2 snapshots exist.
+    """
+    try:
+        conn = snap.reader._conn
+        rows = conn.execute(
+            """
+            SELECT spread_home, total_over, retrieved_at
+            FROM bronze.odds
+            WHERE game_id = ? AND spread_home IS NOT NULL
+              AND retrieved_at <= ?
+            ORDER BY retrieved_at ASC
+            """,
+            [game_id, snap.cutoff_ts],
+        ).df()
+    except Exception:
+        return None, None
+
+    if len(rows) < 2:
+        return None, None
+
+    open_spread = float(rows.iloc[0]["spread_home"])
+    close_spread = float(rows.iloc[-1]["spread_home"])
+    open_total = rows.iloc[0]["total_over"]
+    close_total = rows.iloc[-1]["total_over"]
+
+    spread_mv = (close_spread - open_spread) if is_home else -(close_spread - open_spread)
+    total_mv = float(close_total - open_total) if (
+        pd.notna(open_total) and pd.notna(close_total)
+    ) else None
+    return spread_mv, total_mv
 
 
 def _surface_grass(surface) -> bool | None:
