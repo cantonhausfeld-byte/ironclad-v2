@@ -26,8 +26,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-cov>=4.0", "hypothesis>=6.0"]
+dev = ["pytest>=8.0", "pytest-cov>=4.0", "hypothesis>=6.0", "httpx>=0.24"]
 dashboard = ["streamlit>=1.30", "plotly>=5.0"]
+api = ["fastapi>=0.104", "uvicorn>=0.24"]
 
 [project.scripts]
 ironclad = "cli.main:cli"

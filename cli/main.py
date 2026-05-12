@@ -696,5 +696,34 @@ def serve(port, host) -> None:
         sys.exit(1)
 
 
+# ── api ───────────────────────────────────────────────────────────────────────
+
+@cli.command("api")
+@click.option("--port", default=8000, show_default=True, type=int,
+              help="Port to bind the API server to")
+@click.option("--host", default="localhost", show_default=True,
+              help="Host/address to bind to")
+def api_serve(port, host) -> None:
+    """Launch the FastAPI REST API server.
+
+    Endpoints: GET /api/v1/games, POST /api/v1/simulate,
+    POST /api/v1/edges, GET /api/v1/results.
+    Interactive docs at http://<host>:<port>/docs
+    """
+    try:
+        import uvicorn
+    except ImportError:
+        click.echo(
+            "ERROR: uvicorn not installed. Run: pip install 'ironclad-v2[api]'",
+            err=True,
+        )
+        sys.exit(1)
+
+    click.echo(f"Starting ironclad API at http://{host}:{port}")
+    click.echo(f"Docs: http://{host}:{port}/docs")
+    click.echo("Press Ctrl+C to stop.")
+    uvicorn.run("ironclad.api.app:app", host=host, port=port, reload=False)
+
+
 if __name__ == "__main__":
     cli()
