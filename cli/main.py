@@ -131,7 +131,8 @@ def _lookup_game_id(home: str, away: str, week: int, season: int) -> str | None:
               help="Season range for validation/calibration")
 @click.option("--model", default="all",
               type=click.Choice(["all", "game-outcome", "game-outcome-lgbm", "score-env",
-                                 "player-usage", "player-efficiency", "ensemble"]),
+                                 "player-usage", "player-efficiency", "ensemble",
+                                 "bias-corrector"]),
               help="Which model(s) to train")
 def train(train_seasons, val_seasons, model) -> None:
     """Train ML models on backfilled historical data."""
@@ -159,6 +160,8 @@ def train(train_seasons, val_seasons, model) -> None:
         metrics = {"player_efficiency": trainer.train_player_efficiency(train_list)}
     elif model == "ensemble":
         metrics = {"ensemble": trainer.train_ensemble(train_list, val_list or None)}
+    elif model == "bias-corrector":
+        metrics = {"bias_corrector": trainer.train_bias_corrector()}
 
     click.echo("\nTraining complete. Metrics:")
     for name, m in metrics.items():

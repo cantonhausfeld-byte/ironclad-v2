@@ -15,6 +15,7 @@ from ironclad.models.team.game_outcome import GameOutcomeModel
 from ironclad.models.team.score_env import ScoreEnvironmentModel
 from ironclad.models.player.usage import PlayerUsageModel
 from ironclad.models.player.efficiency import PlayerEfficiencyModel
+from ironclad.models.bias_corrector import TeamBiasCorrector
 from ironclad.models.registry import ModelRegistry
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,7 @@ class MonteCarloEngine:
         self._env_model = _try_load(registry, "score_env", ScoreEnvironmentModel)
         self._usage_model = _try_load(registry, "player_usage", PlayerUsageModel)
         self._eff_model = _try_load(registry, "player_efficiency", PlayerEfficiencyModel)
+        self._bias_corrector: TeamBiasCorrector | None = _try_load_optional(registry, "team_bias")
 
     def run(
         self,
@@ -47,6 +49,12 @@ class MonteCarloEngine:
 
         # ── Model inference (deterministic, before simulation) ────────────────
         home_outcome = self._outcome_model.predict(home_features)
+        # Apply per-team bias correction to margin if corrector is available.
+        if self._bias_corrector is not None:
+            corrected = self._bias_corrector.correct(
+                home_team, away_team, home_outcome["home_margin_mean"]
+            )
+            home_outcome = {**home_outcome, "home_margin_mean": corrected}
         home_env = self._env_model.predict(home_features)
         away_env = self._env_model.predict(away_features)
 
@@ -176,6 +184,15 @@ def _try_load(registry: ModelRegistry, name: str, fallback_cls):
     except FileNotFoundError:
         logger.debug("No trained %s found; using stub", name)
         return fallback_cls()
+
+
+def _try_load_optional(registry: ModelRegistry, name: str):
+    """Load a model that has no stub fallback; return None if not found."""
+    try:
+        return registry.load(name)
+    except FileNotFoundError:
+        logger.debug("No trained %s found; skipping", name)
+        return None
 
 
 def _player_to_dict(p: PlayerDrawResult) -> dict:

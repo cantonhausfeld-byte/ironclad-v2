@@ -67,6 +67,19 @@ TEAM_FEATURES = [
 CLF_FEATURES = [f for f in TEAM_FEATURES if f != "home_win_prob_from_odds"]
 
 
+def _sample_weights(X: pd.DataFrame, season_col: str = "home_season") -> np.ndarray | None:
+    """Exponential recency weights: exp(-0.1 * (max_season - season)).
+
+    Seasons 1 year older get weight 0.905; 5 years older 0.607; 8 years 0.449.
+    Returns None when the season column is absent (training degrades gracefully).
+    """
+    if season_col not in X.columns:
+        return None
+    seasons = X[season_col].fillna(X[season_col].max())
+    max_s = float(seasons.max())
+    return np.exp(-0.1 * (max_s - seasons.values.astype(float)))
+
+
 class GameOutcomeModel(BaseModel):
     """XGBoost game outcome model with isotonic calibration."""
     name = "game_outcome"
@@ -91,6 +104,7 @@ class GameOutcomeModel(BaseModel):
         y_win = y["home_win"].astype(int)
         y_margin = y["home_margin"].astype(float)
         y_total = y["total_score"].astype(float)
+        w = _sample_weights(X)
 
         self._clf = XGBClassifier(
             n_estimators=300, learning_rate=0.05, max_depth=4,
@@ -98,21 +112,21 @@ class GameOutcomeModel(BaseModel):
             eval_metric="logloss",
             random_state=42, n_jobs=-1,
         )
-        self._clf.fit(Xm_clf, y_win)
+        self._clf.fit(Xm_clf, y_win, sample_weight=w)
 
         self._reg_margin = XGBRegressor(
             n_estimators=300, learning_rate=0.05, max_depth=4,
             subsample=0.8, colsample_bytree=0.8,
             random_state=42, n_jobs=-1,
         )
-        self._reg_margin.fit(Xm_reg, y_margin)
+        self._reg_margin.fit(Xm_reg, y_margin, sample_weight=w)
 
         self._reg_total = XGBRegressor(
             n_estimators=300, learning_rate=0.05, max_depth=4,
             subsample=0.8, colsample_bytree=0.8,
             random_state=42, n_jobs=-1,
         )
-        self._reg_total.fit(Xm_reg, y_total)
+        self._reg_total.fit(Xm_reg, y_total, sample_weight=w)
 
         # Compute residual std devs from training set
         margin_pred = self._reg_margin.predict(Xm_reg)

@@ -8,6 +8,7 @@ import pandas as pd
 from xgboost import XGBRegressor
 
 from ironclad.models.base import BaseModel
+from ironclad.models.team.game_outcome import _sample_weights
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,7 @@ class PlayerUsageModel(BaseModel):
         """Train separate regressors per position × target combination."""
         feat_cols = [c for c in FEATURES if c in X.columns]
         positions = X["position"].unique() if "position" in X.columns else ["WR"]
+        w_all = _sample_weights(X, season_col="season")
 
         target_map = {
             "targets":        "target_targets",
@@ -61,6 +63,7 @@ class PlayerUsageModel(BaseModel):
             if mask_pos.sum() < 20:
                 continue
             Xp = _to_xgb(X[mask_pos][feat_cols])
+            w_pos = w_all[mask_pos] if w_all is not None else None
             self._regs[pos] = {}
             for out_key, tgt_col in target_map.items():
                 if tgt_col not in y.columns:
@@ -72,12 +75,13 @@ class PlayerUsageModel(BaseModel):
                 # Poisson objective for count targets (targets, carries): enforces
                 # non-negative predictions and models the log of expected count.
                 obj = "count:poisson" if out_key in ("targets", "carries") else "reg:squarederror"
+                w_valid = w_pos[mask_valid] if w_pos is not None else None
                 reg = XGBRegressor(
                     n_estimators=200, learning_rate=0.05, max_depth=4,
                     subsample=0.8, colsample_bytree=0.8, random_state=42, n_jobs=-1,
                     objective=obj,
                 )
-                reg.fit(Xp[mask_valid], yp[mask_valid].clip(lower=0))
+                reg.fit(Xp[mask_valid], yp[mask_valid].clip(lower=0), sample_weight=w_valid)
                 self._regs[pos][out_key] = reg
 
         self._fitted = True

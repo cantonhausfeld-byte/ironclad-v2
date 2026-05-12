@@ -15,7 +15,7 @@ from ironclad.config import LEAGUE_HOME_WIN_PROB, LEAGUE_AVG_TOTAL, LEAGUE_AVG_H
 from ironclad.models.base import BaseModel
 from ironclad.models.calibration import PlattCalibrator
 from ironclad.models.team.game_outcome import (
-    CLF_FEATURES, TEAM_FEATURES, _build_diff_features, _col,
+    CLF_FEATURES, TEAM_FEATURES, _build_diff_features, _col, _sample_weights,
 )
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -27,7 +27,12 @@ _N_TRIALS = 50
 _N_CV_SPLITS = 3
 
 
-def _lgbm_objective(trial: optuna.Trial, X: pd.DataFrame, y: pd.Series) -> float:
+def _lgbm_objective(
+    trial: optuna.Trial,
+    X: pd.DataFrame,
+    y: pd.Series,
+    weights: np.ndarray | None = None,
+) -> float:
     params = {
         "num_leaves":         trial.suggest_int("num_leaves", 20, 200),
         "learning_rate":      trial.suggest_float("learning_rate", 0.01, 0.15, log=True),
@@ -43,8 +48,9 @@ def _lgbm_objective(trial: optuna.Trial, X: pd.DataFrame, y: pd.Series) -> float
     for train_idx, val_idx in tscv.split(X):
         X_tr, X_val = X.iloc[train_idx], X.iloc[val_idx]
         y_tr, y_val = y.iloc[train_idx], y.iloc[val_idx]
+        w_tr = weights[train_idx] if weights is not None else None
         clf = LGBMClassifier(**params, random_state=42, n_jobs=-1, verbose=-1)
-        clf.fit(X_tr, y_tr)
+        clf.fit(X_tr, y_tr, sample_weight=w_tr)
         probs = clf.predict_proba(X_val)[:, 1]
         scores.append(log_loss(y_val, probs))
     return float(np.mean(scores))
@@ -75,6 +81,7 @@ class GameOutcomeLGBM(BaseModel):
         y_win = y["home_win"].astype(int)
         y_margin = y["home_margin"].astype(float)
         y_total = y["total_score"].astype(float)
+        w = _sample_weights(X)
 
         # Tune on classifier (log-loss objective) with time-series CV.
         # Never shuffle — NFL seasons are a time series; shuffled CV leaks future data.
@@ -83,7 +90,7 @@ class GameOutcomeLGBM(BaseModel):
             sampler=optuna.samplers.TPESampler(seed=42),
         )
         study.optimize(
-            lambda trial: _lgbm_objective(trial, Xm_clf, y_win),
+            lambda trial: _lgbm_objective(trial, Xm_clf, y_win, weights=w),
             n_trials=_N_TRIALS,
             show_progress_bar=False,
         )
@@ -96,13 +103,13 @@ class GameOutcomeLGBM(BaseModel):
         base_kw = {**self._best_params, "random_state": 42, "n_jobs": -1, "verbose": -1}
 
         self._clf = LGBMClassifier(**base_kw)
-        self._clf.fit(Xm_clf, y_win)
+        self._clf.fit(Xm_clf, y_win, sample_weight=w)
 
         self._reg_margin = LGBMRegressor(**base_kw)
-        self._reg_margin.fit(Xm_reg, y_margin)
+        self._reg_margin.fit(Xm_reg, y_margin, sample_weight=w)
 
         self._reg_total = LGBMRegressor(**base_kw)
-        self._reg_total.fit(Xm_reg, y_total)
+        self._reg_total.fit(Xm_reg, y_total, sample_weight=w)
 
         margin_pred = self._reg_margin.predict(Xm_reg)
         total_pred = self._reg_total.predict(Xm_reg)

@@ -270,6 +270,36 @@ class ModelTrainer:
             "val_total_mae": round(mean_absolute_error(y_val["total_score"].values, total_pred), 2),
         }
 
+    def train_bias_corrector(self) -> dict[str, Any]:
+        """Fit TeamBiasCorrector from gold.backtest_predictions. Requires prior backtest run."""
+        from ironclad.models.bias_corrector import TeamBiasCorrector
+        try:
+            df = self._conn.execute("""
+                SELECT home_team, away_team,
+                       home_margin_pred, home_margin_actual
+                FROM gold.backtest_predictions
+                WHERE home_margin_actual IS NOT NULL
+                  AND home_margin_pred   IS NOT NULL
+            """).df()
+        except Exception as exc:
+            logger.warning("Could not load backtest_predictions: %s", exc)
+            return {}
+
+        if df.empty:
+            logger.warning("gold.backtest_predictions is empty; run `ironclad backtest` first")
+            return {}
+
+        model = TeamBiasCorrector()
+        model.fit(df)
+        metrics: dict[str, Any] = {
+            "n_games": len(df),
+            "n_teams": len(model._team_bias),
+            "top_biases": {t: round(b, 3) for t, b in list(model.team_biases().items())[:5]},
+        }
+        self._registry.save(model, metrics)
+        logger.info("TeamBiasCorrector saved. Metrics: %s", metrics)
+        return metrics
+
     def train_ensemble(
         self,
         train_seasons: list[int],

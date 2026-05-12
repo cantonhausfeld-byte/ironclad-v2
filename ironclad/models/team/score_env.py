@@ -9,6 +9,7 @@ from xgboost import XGBRegressor
 
 from ironclad.config import LEAGUE_PRIORS
 from ironclad.models.base import BaseModel
+from ironclad.models.team.game_outcome import _sample_weights
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ class ScoreEnvironmentModel(BaseModel):
     def fit(self, X: pd.DataFrame, y: pd.DataFrame) -> None:
         feat_cols = [c for c in FEATURES if c in X.columns]
         Xm = X[feat_cols].fillna(0)
+        w = _sample_weights(X, season_col="season")
 
         targets = {
             "_reg_pass_rate":  "target_pass_rate",
@@ -47,11 +49,12 @@ class ScoreEnvironmentModel(BaseModel):
                 logger.warning("Missing target %s, skipping", tgt)
                 continue
             mask = y[tgt].notna()
+            w_masked = w[mask] if w is not None else None
             reg = XGBRegressor(
                 n_estimators=200, learning_rate=0.05, max_depth=4,
                 subsample=0.8, colsample_bytree=0.8, random_state=42, n_jobs=-1,
             )
-            reg.fit(Xm[mask], y[tgt][mask])
+            reg.fit(Xm[mask], y[tgt][mask], sample_weight=w_masked)
             setattr(self, attr, reg)
 
         self._fitted = True
