@@ -81,6 +81,40 @@ class FeatureSnapshot:
         df = df[(df["player_id"] == player_id) & (df["season"] == season) & (df["week"] < week)]
         return df.sort_values("week").tail(n)
 
+    # ── NGS tracking data ────────────────────────────────────────────────────
+
+    def _past_week_pairs(self) -> pd.DataFrame:
+        """DataFrame of (season, week) int pairs for completed games before cutoff."""
+        games = self._games()
+        past = games[games["gameday"].dt.date < self.cutoff_ts.date()][["season", "week"]]
+        return past.drop_duplicates().astype({"season": int, "week": int})
+
+    def player_ngs_receiving(self, player_id: str, n: int = 4) -> pd.DataFrame:
+        """Last n NGS receiving rows for player from completed games before cutoff."""
+        df = self._read_cached("bronze.ngs_receiving")
+        df = df[df["player_id"] == player_id].copy()
+        if df.empty:
+            return df
+        past = self._past_week_pairs()
+        if not past.empty:
+            df["season"] = df["season"].astype(int)
+            df["week"] = df["week"].astype(int)
+            df = df.merge(past, on=["season", "week"], how="inner")
+        return df.sort_values(["season", "week"]).tail(n)
+
+    def player_ngs_passing(self, player_id: str, n: int = 4) -> pd.DataFrame:
+        """Last n NGS passing rows for player from completed games before cutoff."""
+        df = self._read_cached("bronze.ngs_passing")
+        df = df[df["player_id"] == player_id].copy()
+        if df.empty:
+            return df
+        past = self._past_week_pairs()
+        if not past.empty:
+            df["season"] = df["season"].astype(int)
+            df["week"] = df["week"].astype(int)
+            df = df.merge(past, on=["season", "week"], how="inner")
+        return df.sort_values(["season", "week"]).tail(n)
+
     # ── Game context ──────────────────────────────────────────────────────────
 
     def game_row(self, game_id: str) -> pd.Series | None:

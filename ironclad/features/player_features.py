@@ -99,6 +99,8 @@ class PlayerFeatureBuilder:
         recent = snap.player_recent_games(pid, n=ROLLING_WINDOW)
         n_games = len(recent)
         recent_status = snap.player_recent_status(pid, int(game["season"]), int(game["week"]), n=ROLLING_WINDOW)
+        ngs_recv = snap.player_ngs_receiving(pid, n=ROLLING_WINDOW)
+        ngs_pass = snap.player_ngs_passing(pid, n=ROLLING_WINDOW)
 
         # Team volume denominators from rolling L4
         team_pass_att = float(team_recent["pass_attempts"].mean()) if not team_recent.empty and "pass_attempts" in team_recent.columns else 30.0
@@ -169,6 +171,23 @@ class PlayerFeatureBuilder:
         if td_per_carry is not None:
             td_per_carry = max(0.0, min(0.15, td_per_carry))
 
+        # NGS tracking features (available 2016+; null if not backfilled)
+        separation_l4 = (
+            float(ngs_recv["avg_separation"].dropna().mean())
+            if not ngs_recv.empty and "avg_separation" in ngs_recv.columns and ngs_recv["avg_separation"].notna().any()
+            else None
+        )
+        yac_above_expected_l4 = (
+            float(ngs_recv["avg_yac_above_expectation"].dropna().mean())
+            if not ngs_recv.empty and "avg_yac_above_expectation" in ngs_recv.columns and ngs_recv["avg_yac_above_expectation"].notna().any()
+            else None
+        )
+        cpoe_l4 = (
+            float(ngs_pass["completion_percentage_above_expectation"].dropna().mean())
+            if not ngs_pass.empty and "completion_percentage_above_expectation" in ngs_pass.columns and ngs_pass["completion_percentage_above_expectation"].notna().any()
+            else None
+        )
+
         def opp_feat(col, default=None):
             if opp_feats.empty or col not in opp_feats.columns:
                 return default
@@ -210,6 +229,9 @@ class PlayerFeatureBuilder:
             "td_rate_per_target_l4":    td_per_tgt,
             "td_rate_per_carry_l4":     td_per_carry,
             "adot_l4":                  adot_l4,
+            "separation_l4":            separation_l4,
+            "yac_above_expected_l4":    yac_above_expected_l4,
+            "cpoe_l4":                  cpoe_l4,
             "opp_def_pass_epa_l4":      opp_feat("def_epa_per_play_l4"),
             "opp_def_rush_epa_l4":      opp_feat("def_rush_epa_l4"),
             "opp_def_sack_rate_l4":     opp_feat("def_sack_rate_l4"),

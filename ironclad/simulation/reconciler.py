@@ -6,6 +6,11 @@ import numpy as np
 from ironclad.simulation.game_draw import GameDrawResult
 from ironclad.simulation.player_draw import PlayerDrawResult, PlayerContext
 
+# League-average red zone TD conversion rate (~57% of RZ trips end in TD).
+_RZ_TD_RATE = 0.57
+# Expected points per RZ trip: 0.57*7 + 0.43*3 ≈ 5.28
+_EXPECTED_PTS_PER_RZ_TRIP = _RZ_TD_RATE * 7.0 + (1.0 - _RZ_TD_RATE) * 3.0
+
 
 class Reconciler:
     """Scales player yards to match team totals and distributes TDs."""
@@ -65,8 +70,12 @@ class Reconciler:
                 p.carries = max(0, round(p.carries * scale))
 
         # ── TD distribution ───────────────────────────────────────────────────
-        # Estimate team TDs from score (rough: subtract 3 FGs worth, rest are TDs)
-        team_tds = max(0, round((team_score - 3) / 7)) if team_score >= 7 else 0
+        # Sample red zone trips from Poisson, then each trip independently
+        # scores a TD with probability _RZ_TD_RATE (vs field goal).
+        # This gives a joint (TDs, FGs) distribution instead of a deterministic
+        # "score minus a fixed FG offset" estimate.
+        rz_trips = int(rng.poisson(max(0.5, team_score / _EXPECTED_PTS_PER_RZ_TRIP)))
+        team_tds = int(rng.binomial(rz_trips, _RZ_TD_RATE))
 
         ctx_by_id = {c.player_id: c for c in contexts}
         eligible = [p for p in players if p.played and p.player_id in ctx_by_id]
