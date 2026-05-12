@@ -589,6 +589,73 @@ def status() -> None:
         click.echo(f"Status check failed: {exc}", err=True)
 
 
+# ── validate ─────────────────────────────────────────────────────────────────
+
+@cli.command()
+@click.option("--season", required=True, type=int)
+@click.option("--strict", is_flag=True, default=False,
+              help="Exit 1 if any check fails")
+def validate(season: int, strict: bool) -> None:
+    """Run data quality checks for a season."""
+    from ironclad.store.connection import get_connection
+    from ironclad.store.schema import create_all_tables
+    from ironclad.store.data_quality import run_all_checks
+
+    conn = get_connection()
+    create_all_tables(conn)
+
+    click.echo(f"\nData quality checks — season {season}\n")
+
+    try:
+        results = run_all_checks(conn, season)
+    except Exception as exc:
+        click.echo(click.style(f"ERROR running checks: {exc}", fg="red"), err=True)
+        sys.exit(1)
+
+    def _s(passed: bool) -> str:
+        return click.style("✓", fg="green") if passed else click.style("✗", fg="red")
+
+    # Row counts
+    rc = results["row_counts"]
+    click.echo(f"  {_s(rc['passed'])}  Row counts")
+    for table, count in rc["counts"].items():
+        flag = click.style("  ← 0 rows", fg="yellow") if count == 0 else ""
+        click.echo(f"       {table:<42} {count:>8,}{flag}")
+
+    # Null rates
+    nr = results["null_rates"]
+    click.echo(f"\n  {_s(nr['passed'])}  Null rates (critical columns)")
+    for key, pct in nr["null_rates"].items():
+        color = "red" if pct >= 1.0 else ("yellow" if pct >= 0.5 else "green")
+        click.echo(f"       {key:<55}  null: {click.style(f'{pct:.1%}', fg=color)}")
+
+    # EPA range
+    er = results["epa_range"]
+    click.echo(f"\n  {_s(er['passed'])}  EPA plausibility [-1.5, 1.5]")
+    for table, count in er["out_of_range"].items():
+        click.echo(f"       {table:<42} {count:>6} out-of-range rows")
+
+    # Completeness
+    score = results["completeness_score"]
+    cp = results["completeness_passed"]
+    click.echo(
+        f"\n  {_s(cp)}  Gold feature completeness: "
+        f"{click.style(f'{score:.1%}', fg='green' if cp else 'red')}  (target ≥ 70%)"
+    )
+
+    # Summary
+    overall = results["passed"]
+    summary = (
+        click.style("ALL CHECKS PASSED", fg="green")
+        if overall
+        else click.style("SOME CHECKS FAILED", fg="red")
+    )
+    click.echo(f"\n  Summary: {summary}\n")
+
+    if strict and not overall:
+        sys.exit(1)
+
+
 # ── serve ─────────────────────────────────────────────────────────────────────
 
 @cli.command()
