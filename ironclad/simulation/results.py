@@ -18,6 +18,8 @@ class DrawRecord:
     away_rush_yards: float
     home_pass_att: int
     away_pass_att: int
+    home_turnovers: int = 0
+    away_turnovers: int = 0
     player_stats: list[dict] = field(default_factory=list)
 
 

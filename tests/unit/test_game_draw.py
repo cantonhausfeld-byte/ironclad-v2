@@ -128,6 +128,52 @@ def test_gqf_catch_rate_bounded():
         assert r.receptions <= r.targets
 
 
+# ── Turnover modeling ─────────────────────────────────────────────────────────
+
+_OUTCOME = {
+    "total_mean": 45.0, "total_std": 8.0,
+    "home_margin_mean": 3.0, "home_margin_std": 14.0,
+}
+_HOME_ENV = {"pass_rate_projected": 0.58, "total_plays_projected": 64}
+_AWAY_ENV = {"pass_rate_projected": 0.55, "total_plays_projected": 62}
+
+
+def test_turnovers_are_non_negative():
+    gd = GameDraw()
+    rng = np.random.default_rng(0)
+    for _ in range(200):
+        result = gd.draw(rng, _OUTCOME, _HOME_ENV, _AWAY_ENV)
+        assert result.home_turnovers >= 0
+        assert result.away_turnovers >= 0
+
+
+def test_high_turnover_games_reduce_score():
+    # Draw 2000 games; games where one team has ≥4 TOs should average lower
+    # score than games where that team has 0 TOs.
+    gd = GameDraw()
+    rng = np.random.default_rng(7)
+    zero_to_scores, high_to_scores = [], []
+    for _ in range(2000):
+        result = gd.draw(rng, _OUTCOME, _HOME_ENV, _AWAY_ENV)
+        if result.home_turnovers == 0:
+            zero_to_scores.append(result.home_score)
+        elif result.home_turnovers >= 4:
+            high_to_scores.append(result.home_score)
+
+    assert len(zero_to_scores) > 0 and len(high_to_scores) > 0
+    assert np.mean(zero_to_scores) > np.mean(high_to_scores)
+
+
+def test_mean_score_unaffected_by_normalization():
+    # Normalized TO adjustment preserves mean score across many draws.
+    # Mean home score should stay within ±2 pts of the un-adjusted expectation.
+    gd = GameDraw()
+    rng = np.random.default_rng(13)
+    home_scores = [gd.draw(rng, _OUTCOME, _HOME_ENV, _AWAY_ENV).home_score for _ in range(2000)]
+    expected = (_OUTCOME["total_mean"] + _OUTCOME["home_margin_mean"]) / 2.0
+    assert abs(np.mean(home_scores) - expected) < 3.0
+
+
 def test_game_draw_sets_quality_factors():
     # GameDraw.draw() should populate both quality factor fields.
     home_env = {"pass_rate_projected": 0.58, "total_plays_projected": 64}

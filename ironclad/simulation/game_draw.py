@@ -25,6 +25,8 @@ class GameDrawResult:
     away_effective_pass_rate: float = 0.0
     home_game_quality_factor: float = 0.0
     away_game_quality_factor: float = 0.0
+    home_turnovers: int = 0
+    away_turnovers: int = 0
 
 
 def _apply_game_script(
@@ -95,6 +97,22 @@ class GameDraw:
         away_pass_att = round(away_effective_rate * away_plays)
         away_rush_att = away_plays - away_pass_att
 
+        # ── Turnovers ─────────────────────────────────────────────────────────
+        # INT rate ≈ 2.5% of pass attempts; fumble-lost rate ≈ 0.75% of plays.
+        # We adjust scores by the *deviation* from expected TOs so the mean score
+        # is preserved while realistic blowout/comeback tails are widened.
+        home_ints = int(rng.poisson(home_pass_att * 0.025))
+        home_fum  = int(rng.binomial(home_rush_att + home_pass_att, 0.0075))
+        home_tos  = home_ints + home_fum
+        away_ints = int(rng.poisson(away_pass_att * 0.025))
+        away_fum  = int(rng.binomial(away_rush_att + away_pass_att, 0.0075))
+        away_tos  = away_ints + away_fum
+
+        home_to_exp = home_pass_att * 0.025 + (home_rush_att + home_pass_att) * 0.0075
+        away_to_exp = away_pass_att * 0.025 + (away_rush_att + away_pass_att) * 0.0075
+        home_score = max(0, round(home_score - (home_tos - home_to_exp) * 3.5))
+        away_score = max(0, round(away_score - (away_tos - away_to_exp) * 3.5))
+
         # ── QB game-quality factors ───────────────────────────────────────────
         # Each team's QB draw is independent — a draw where both QBs play above
         # average is possible (warm weather, no pass rush). Std=0.15 keeps
@@ -128,4 +146,6 @@ class GameDraw:
             away_effective_pass_rate=away_effective_rate,
             home_game_quality_factor=home_gqf,
             away_game_quality_factor=away_gqf,
+            home_turnovers=home_tos,
+            away_turnovers=away_tos,
         )

@@ -98,6 +98,8 @@ class MonteCarloEngine:
                 away_rush_yards=gd.away_rush_yards,
                 home_pass_att=gd.home_pass_att,
                 away_pass_att=gd.away_pass_att,
+                home_turnovers=gd.home_turnovers,
+                away_turnovers=gd.away_turnovers,
                 player_stats=player_stats,
             ))
 

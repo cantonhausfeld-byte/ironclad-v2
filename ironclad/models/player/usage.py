@@ -69,11 +69,15 @@ class PlayerUsageModel(BaseModel):
                 mask_valid = yp.notna()
                 if mask_valid.sum() < 20:
                     continue
+                # Poisson objective for count targets (targets, carries): enforces
+                # non-negative predictions and models the log of expected count.
+                obj = "count:poisson" if out_key in ("targets", "carries") else "reg:squarederror"
                 reg = XGBRegressor(
                     n_estimators=200, learning_rate=0.05, max_depth=4,
                     subsample=0.8, colsample_bytree=0.8, random_state=42, n_jobs=-1,
+                    objective=obj,
                 )
-                reg.fit(Xp[mask_valid], yp[mask_valid])
+                reg.fit(Xp[mask_valid], yp[mask_valid].clip(lower=0))
                 self._regs[pos][out_key] = reg
 
         self._fitted = True
