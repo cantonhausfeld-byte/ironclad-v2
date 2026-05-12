@@ -184,7 +184,10 @@ class TeamFeatureBuilder:
             "elo_pre_game":              elo,
             # Context
             "rest_days":              rest_days,
-            "is_divisional":          None,
+            "is_divisional":          (
+                _NFL_DIVISIONS.get(team) == _NFL_DIVISIONS.get(opponent)
+                and _NFL_DIVISIONS.get(team) is not None
+            ),
             "implied_total_from_odds": float(implied_total) if pd.notna(implied_total) else None,
             "spread_from_odds":       float(spread) if (is_home and pd.notna(spread)) else
                                       (-float(spread) if pd.notna(spread) else None),
@@ -224,6 +227,30 @@ def _def_l1_from_opp(col: str, recent_l1: pd.DataFrame, snap, team: str, default
         return None
     vals = opp_rows[col].dropna()
     return float(vals.iloc[0]) if len(vals) else None
+
+
+_NFL_DIVISIONS: dict[str, str] = {
+    # AFC East
+    "BUF": "AFC_EAST", "MIA": "AFC_EAST", "NE": "AFC_EAST", "NYJ": "AFC_EAST",
+    # AFC North
+    "BAL": "AFC_NORTH", "CIN": "AFC_NORTH", "CLE": "AFC_NORTH", "PIT": "AFC_NORTH",
+    # AFC South
+    "HOU": "AFC_SOUTH", "IND": "AFC_SOUTH", "JAX": "AFC_SOUTH", "TEN": "AFC_SOUTH",
+    # AFC West
+    "DEN": "AFC_WEST", "KC": "AFC_WEST",
+    "LAC": "AFC_WEST", "SD": "AFC_WEST",   # SD relocated → LAC 2017
+    "LV": "AFC_WEST", "OAK": "AFC_WEST",   # OAK relocated → LV 2020
+    # NFC East
+    "DAL": "NFC_EAST", "NYG": "NFC_EAST", "PHI": "NFC_EAST",
+    "WAS": "NFC_EAST", "WSH": "NFC_EAST",
+    # NFC North
+    "CHI": "NFC_NORTH", "DET": "NFC_NORTH", "GB": "NFC_NORTH", "MIN": "NFC_NORTH",
+    # NFC South
+    "ATL": "NFC_SOUTH", "CAR": "NFC_SOUTH", "NO": "NFC_SOUTH", "TB": "NFC_SOUTH",
+    # NFC West
+    "ARI": "NFC_WEST", "LAR": "NFC_WEST", "STL": "NFC_WEST",  # STL relocated → LAR 2016
+    "SEA": "NFC_WEST", "SF": "NFC_WEST",
+}
 
 
 def _compute_rest_days(team: str, game: pd.Series, snap: FeatureSnapshot) -> int | None:

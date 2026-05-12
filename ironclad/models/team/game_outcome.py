@@ -76,6 +76,13 @@ TEAM_FEATURES = [
     "yards_per_play_diff",
     "def_epa_pass_early_diff",
     "def_sack_rate_diff",
+    # Rest / schedule context (restored — zero importance at depth=2 was a capacity artifact)
+    "home_rest_days",
+    "away_rest_days",
+    "rest_advantage",
+    "home_is_post_bye",
+    "away_is_post_bye",
+    "is_divisional",
 ]
 
 # Win-probability classifier omits home_win_prob_from_odds to avoid circular dependency.
