@@ -40,6 +40,7 @@ TEAM_FEATURES = [
     "pass_rate_diff",
     "success_rate_diff",
     "points_pg_diff",
+    "turnover_diff",
     # Phase 2A: situational features
     "cpoe_diff",
     "neutral_epa_diff",
@@ -47,11 +48,6 @@ TEAM_FEATURES = [
     "epa_rush_early_diff",
     "epa_third_down_diff",
     "third_down_pct_diff",
-    "home_rest_days",
-    "away_rest_days",
-    "rest_advantage",
-    "is_divisional",
-    "altitude_ft",
     "is_dome",
     "temp_f",
     "wind_mph",
@@ -59,6 +55,34 @@ TEAM_FEATURES = [
     "implied_total_from_odds",
     "spread_from_odds",
     "home_win_prob_from_odds",
+    # Phase 2B: season-to-date EPA, red zone
+    "off_epa_std_diff",
+    "def_epa_std_diff",
+    "off_epa_rz_diff",
+    "def_epa_rz_diff",
+    # Phase 2E: Elo team rating + game week
+    "elo_diff",
+    "game_week",
+    # Phase 2H: momentum (last-1-game vs L4 trend)
+    "off_epa_momentum_diff",
+    "def_epa_momentum_diff",
+    # Phase 2G: defense-side feature completion
+    "def_success_rate_diff",
+    "def_cpoe_allowed_diff",
+    "def_neutral_epa_diff",
+    "def_epa_rush_early_diff",
+    "def_epa_third_down_diff",
+    "def_third_down_pct_diff",
+    "yards_per_play_diff",
+    "def_epa_pass_early_diff",
+    "def_sack_rate_diff",
+    # Rest / schedule context (restored — zero importance at depth=2 was a capacity artifact)
+    "home_rest_days",
+    "away_rest_days",
+    "rest_advantage",
+    "home_is_post_bye",
+    "away_is_post_bye",
+    "is_divisional",
 ]
 
 # Win-probability classifier omits home_win_prob_from_odds to avoid circular dependency.
@@ -72,10 +96,28 @@ class GameOutcomeModel(BaseModel):
     name = "game_outcome"
     version = "v1.0"
 
-    def __init__(self) -> None:
-        self._clf: XGBClassifier | None = None      # home_win classification
-        self._reg_margin: XGBRegressor | None = None # home_margin regression
-        self._reg_total: XGBRegressor | None = None  # total_score regression
+    def __init__(
+        self, *,
+        n_estimators: int = 300,
+        learning_rate: float = 0.05,
+        max_depth: int = 4,
+        subsample: float = 0.8,
+        colsample_bytree: float = 0.8,
+        min_child_weight: int = 1,
+        gamma: float = 0.0,
+    ) -> None:
+        self._hp = dict(
+            n_estimators=n_estimators,
+            learning_rate=learning_rate,
+            max_depth=max_depth,
+            subsample=subsample,
+            colsample_bytree=colsample_bytree,
+            min_child_weight=min_child_weight,
+            gamma=gamma,
+        )
+        self._clf: XGBClassifier | None = None
+        self._reg_margin: XGBRegressor | None = None
+        self._reg_total: XGBRegressor | None = None
         self._calibrator = PlattCalibrator()
         self._margin_std = _MARGIN_STD
         self._total_std = _TOTAL_STD
@@ -93,23 +135,20 @@ class GameOutcomeModel(BaseModel):
         y_total = y["total_score"].astype(float)
 
         self._clf = XGBClassifier(
-            n_estimators=300, learning_rate=0.05, max_depth=4,
-            subsample=0.8, colsample_bytree=0.8,
+            **self._hp,
             eval_metric="logloss",
             random_state=42, n_jobs=-1,
         )
         self._clf.fit(Xm_clf, y_win)
 
         self._reg_margin = XGBRegressor(
-            n_estimators=300, learning_rate=0.05, max_depth=4,
-            subsample=0.8, colsample_bytree=0.8,
+            **self._hp,
             random_state=42, n_jobs=-1,
         )
         self._reg_margin.fit(Xm_reg, y_margin)
 
         self._reg_total = XGBRegressor(
-            n_estimators=300, learning_rate=0.05, max_depth=4,
-            subsample=0.8, colsample_bytree=0.8,
+            **self._hp,
             random_state=42, n_jobs=-1,
         )
         self._reg_total.fit(Xm_reg, y_total)
@@ -206,6 +245,7 @@ def _build_diff_features(X: pd.DataFrame) -> pd.DataFrame:
         ("pass_rate_diff",      "off_pass_rate_l4",        None),
         ("success_rate_diff",   "off_success_rate_l4",     None),
         ("points_pg_diff",      "off_points_per_game_l4",  None),
+        ("turnover_diff",       "off_turnovers_l4",        None),
         # Phase 2A: situational features
         ("cpoe_diff",           "off_cpoe_l4",             None),
         ("neutral_epa_diff",    "off_neutral_epa_l4",      None),
@@ -213,6 +253,18 @@ def _build_diff_features(X: pd.DataFrame) -> pd.DataFrame:
         ("epa_rush_early_diff", "off_epa_rush_early_l4",   None),
         ("epa_third_down_diff", "off_epa_third_down_l4",   None),
         ("third_down_pct_diff", "off_third_down_pct_l4",   None),
+        # Phase 2G: defense-side completions
+        ("def_success_rate_diff",    "def_success_rate_l4",    None),
+        ("def_cpoe_allowed_diff",    "def_cpoe_allowed_l4",    None),
+        ("def_neutral_epa_diff",     "def_neutral_epa_l4",     None),
+        ("def_epa_rush_early_diff",  "def_epa_rush_early_l4",  None),
+        ("def_epa_third_down_diff",  "def_epa_third_down_l4",  None),
+        ("def_third_down_pct_diff",  "def_third_down_pct_l4",  None),
+        ("def_turnovers_forced_diff","def_turnovers_forced_l4",None),
+        ("yards_per_play_diff",      "off_yards_per_play_l4",  None),
+        ("def_epa_pass_early_diff",  "def_epa_pass_early_l4",  None),
+        ("def_sack_rate_diff",       "def_sack_rate_l4",       None),
+        ("fourth_down_att_diff",     "off_fourth_down_att_l4", None),
     ]
     # If input has home_ / away_ prefix form (from training loader):
     for diff_col, feat_col, _ in pairs:
@@ -239,6 +291,7 @@ def _build_diff_features(X: pd.DataFrame) -> pd.DataFrame:
         ("implied_total_from_odds", LEAGUE_AVG_TOTAL),
         ("spread_from_odds", 0.0),
         ("home_win_prob_from_odds", LEAGUE_HOME_WIN_PROB),
+        ("surface_grass", False),
     ]:
         # Training data has home_/away_ prefixes — try home-side first
         home_col = f"home_{col}"
@@ -248,6 +301,58 @@ def _build_diff_features(X: pd.DataFrame) -> pd.DataFrame:
             elif col not in out.columns:
                 out[col] = default
         out[col] = pd.to_numeric(out[col], errors="coerce").fillna(default)
+
+    # Phase 2B: season-to-date EPA diffs
+    for diff_col, feat_col in [
+        ("off_epa_std_diff", "off_epa_per_play_std"),
+        ("def_epa_std_diff", "def_epa_per_play_std"),
+        ("off_epa_rz_diff",  "off_epa_rz_l4"),
+        ("def_epa_rz_diff",  "def_epa_rz_l4"),
+    ]:
+        home_col = f"home_{feat_col}"
+        away_col = f"away_{feat_col}"
+        if home_col in X.columns and away_col in X.columns:
+            out[diff_col] = X[home_col].fillna(0) - X[away_col].fillna(0)
+        elif feat_col in X.columns:
+            out[diff_col] = X[feat_col].fillna(0)
+        else:
+            out[diff_col] = 0.0
+
+    # Phase 2B: post-bye flags (rest_days >= 14 means team had a bye week)
+    home_rest = pd.to_numeric(out.get("home_rest_days", 7), errors="coerce").fillna(7)
+    away_rest = pd.to_numeric(out.get("away_rest_days", 7), errors="coerce").fillna(7)
+    out["home_is_post_bye"] = (home_rest >= 14).astype(int)
+    out["away_is_post_bye"] = (away_rest >= 14).astype(int)
+
+    # Phase 2E: Elo diff (home_elo_pre_game - away_elo_pre_game)
+    home_elo_col = "home_elo_pre_game"
+    away_elo_col = "away_elo_pre_game"
+    if home_elo_col in X.columns and away_elo_col in X.columns:
+        out["elo_diff"] = X[home_elo_col].fillna(1500) - X[away_elo_col].fillna(1500)
+    elif "elo_pre_game" in X.columns:
+        out["elo_diff"] = X["elo_pre_game"].fillna(0)
+    else:
+        out["elo_diff"] = 0.0
+
+    # Phase 2E: game week (same for both teams — raw week number, not a diff)
+    if "home_week" in X.columns:
+        out["game_week"] = pd.to_numeric(X["home_week"], errors="coerce").fillna(9)
+    elif "week" in X.columns:
+        out["game_week"] = pd.to_numeric(X["week"], errors="coerce").fillna(9)
+    else:
+        out["game_week"] = 9.0
+
+    # Phase 2H: momentum = (L1 - L4) for home minus (L1 - L4) for away
+    # Positive means home is trending up relative to away
+    for momentum_col, l1_col, l4_col in [
+        ("off_epa_momentum_diff", "off_epa_per_play_l1", "off_epa_per_play_l4"),
+        ("def_epa_momentum_diff", "def_epa_per_play_l1", "def_epa_per_play_l4"),
+    ]:
+        home_l1 = pd.to_numeric(X.get(f"home_{l1_col}", pd.Series(0, index=X.index)), errors="coerce").fillna(0)
+        home_l4 = pd.to_numeric(X.get(f"home_{l4_col}", pd.Series(0, index=X.index)), errors="coerce").fillna(0)
+        away_l1 = pd.to_numeric(X.get(f"away_{l1_col}", pd.Series(0, index=X.index)), errors="coerce").fillna(0)
+        away_l4 = pd.to_numeric(X.get(f"away_{l4_col}", pd.Series(0, index=X.index)), errors="coerce").fillna(0)
+        out[momentum_col] = (home_l1 - home_l4) - (away_l1 - away_l4)
 
     return out
 

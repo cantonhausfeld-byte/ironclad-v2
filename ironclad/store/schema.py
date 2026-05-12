@@ -241,6 +241,26 @@ def _bronze(conn: duckdb.DuckDBPyConnection) -> None:
     """)
 
     conn.execute("""
+    CREATE TABLE IF NOT EXISTS bronze.ngs_data (
+        player_id                              VARCHAR NOT NULL,
+        player_name                            VARCHAR,
+        season                                 INTEGER NOT NULL,
+        week                                   INTEGER NOT NULL,
+        stat_type                              VARCHAR NOT NULL,
+        avg_time_to_throw                      FLOAT,
+        avg_completed_air_yards                FLOAT,
+        avg_intended_air_yards                 FLOAT,
+        completion_percentage_above_expectation FLOAT,
+        efficiency                             FLOAT,
+        rush_yards_over_expected               FLOAT,
+        avg_separation                         FLOAT,
+        catch_percentage_above_expectation     FLOAT,
+        _ingest_ts                             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (player_id, season, week, stat_type)
+    )
+    """)
+
+    conn.execute("""
     CREATE TABLE IF NOT EXISTS bronze.stadiums (
         stadium_id   VARCHAR NOT NULL PRIMARY KEY,
         stadium_name VARCHAR NOT NULL,
@@ -446,6 +466,14 @@ def _gold(conn: duckdb.DuckDBPyConnection) -> None:
         -- Season-to-date
         off_epa_per_play_std     FLOAT,
         def_epa_per_play_std     FLOAT,
+        -- Last-1-game (momentum)
+        off_epa_per_play_l1      FLOAT,
+        def_epa_per_play_l1      FLOAT,
+        -- Turnovers (rolling L4)
+        off_turnovers_l4         FLOAT,
+        def_turnovers_forced_l4  FLOAT,
+        -- Elo
+        elo_pre_game             FLOAT,
         -- Context
         rest_days                INTEGER,
         is_divisional            BOOLEAN,
@@ -510,6 +538,10 @@ def _gold(conn: duckdb.DuckDBPyConnection) -> None:
         team_off_pass_rate_l4    FLOAT,
         team_off_epa_l4          FLOAT,
         team_implied_total        FLOAT,
+        -- NGS tracking (rolling L4 avg)
+        ngs_avg_separation                      FLOAT,
+        ngs_rush_yards_over_expected            FLOAT,
+        ngs_completion_pct_above_expected       FLOAT,
         -- Targets (NULL until game played)
         target_targets           FLOAT,
         target_carries           FLOAT,
@@ -582,6 +614,18 @@ def _gold(conn: duckdb.DuckDBPyConnection) -> None:
         model_p50   FLOAT,
         model_p90   FLOAT,
         PRIMARY KEY (edge_id)
+    )
+    """)
+
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS gold.elo_ratings (
+        game_id        VARCHAR NOT NULL,
+        team           VARCHAR NOT NULL,
+        season         INTEGER NOT NULL,
+        week           INTEGER NOT NULL,
+        elo_pre_game   FLOAT   NOT NULL,
+        elo_post_game  FLOAT   NOT NULL,
+        PRIMARY KEY (game_id, team)
     )
     """)
 
@@ -665,9 +709,17 @@ _EXPECTED_COLS: dict[str, list[tuple[str, str]]] = {
         ("off_third_down_pct_l4", "FLOAT"),
         ("def_third_down_pct_l4", "FLOAT"),
         ("off_fourth_down_att_l4","FLOAT"),
+        ("off_turnovers_l4",         "FLOAT"),
+        ("def_turnovers_forced_l4",  "FLOAT"),
+        ("elo_pre_game",             "FLOAT"),
+        ("off_epa_per_play_l1",      "FLOAT"),
+        ("def_epa_per_play_l1",      "FLOAT"),
     ],
     "gold.player_game_features": [
-        ("adot_l4", "FLOAT"),
+        ("adot_l4",                               "FLOAT"),
+        ("ngs_avg_separation",                    "FLOAT"),
+        ("ngs_rush_yards_over_expected",          "FLOAT"),
+        ("ngs_completion_pct_above_expected",     "FLOAT"),
     ],
 }
 

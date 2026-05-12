@@ -8,6 +8,7 @@ import pytest
 
 from ironclad.features.team_features import _parse_kickoff
 from ironclad.features.utils import safe_divide, completeness_score
+from ironclad.models.team.game_outcome import _build_diff_features
 
 
 # ── _parse_kickoff ─────────────────────────────────────────────────────────────
@@ -82,6 +83,46 @@ def test_completeness_partial():
     s = pd.Series([1.0, None, 3.0, None])
     score = completeness_score(s)
     assert score == pytest.approx(0.5)
+
+
+# ── Phase 2B: _build_diff_features additions ──────────────────────────────────
+
+def test_post_bye_flag_set_when_rest_gte_14():
+    X = pd.DataFrame([{"home_rest_days": 14, "away_rest_days": 7}])
+    Xf = _build_diff_features(X)
+    assert Xf["home_is_post_bye"].iloc[0] == 1
+    assert Xf["away_is_post_bye"].iloc[0] == 0
+
+
+def test_post_bye_flag_clear_on_normal_week():
+    X = pd.DataFrame([{"home_rest_days": 7, "away_rest_days": 7}])
+    Xf = _build_diff_features(X)
+    assert Xf["home_is_post_bye"].iloc[0] == 0
+    assert Xf["away_is_post_bye"].iloc[0] == 0
+
+
+def test_epa_rz_diff_computed_from_prefixed_cols():
+    X = pd.DataFrame([{"home_off_epa_rz_l4": 0.15, "away_off_epa_rz_l4": 0.05}])
+    Xf = _build_diff_features(X)
+    assert Xf["off_epa_rz_diff"].iloc[0] == pytest.approx(0.10, abs=1e-6)
+
+
+def test_epa_std_diff_computed_from_prefixed_cols():
+    X = pd.DataFrame([{"home_off_epa_per_play_std": 0.08, "away_off_epa_per_play_std": 0.02}])
+    Xf = _build_diff_features(X)
+    assert Xf["off_epa_std_diff"].iloc[0] == pytest.approx(0.06, abs=1e-6)
+
+
+def test_surface_grass_taken_from_home_side():
+    X = pd.DataFrame([{"home_surface_grass": True}])
+    Xf = _build_diff_features(X)
+    assert bool(Xf["surface_grass"].iloc[0]) is True
+
+
+def test_turnover_diff_computed_from_prefixed_cols():
+    X = pd.DataFrame([{"home_off_turnovers_l4": 2.5, "away_off_turnovers_l4": 1.0}])
+    Xf = _build_diff_features(X)
+    assert Xf["turnover_diff"].iloc[0] == pytest.approx(1.5, abs=1e-6)
 
 
 # ── TeamFeatureBuilder integration (in-memory DB) ─────────────────────────────

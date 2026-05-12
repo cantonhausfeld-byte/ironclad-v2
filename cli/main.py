@@ -132,7 +132,11 @@ def _lookup_game_id(home: str, away: str, week: int, season: int) -> str | None:
 @click.option("--model", default="all",
               type=click.Choice(["all", "game-outcome", "score-env", "player-usage", "player-efficiency"]),
               help="Which model(s) to train")
-def train(train_seasons, val_seasons, model) -> None:
+@click.option("--tune", is_flag=True, default=False,
+              help="Run Optuna HPO before final training (game-outcome only).")
+@click.option("--tune-trials", default=50, show_default=True, type=int,
+              help="Number of Optuna trials when --tune is set.")
+def train(train_seasons, val_seasons, model, tune, tune_trials) -> None:
     """Train ML models on backfilled historical data."""
     train_list = _parse_seasons(train_seasons)
     val_list = _parse_seasons(val_seasons)
@@ -141,13 +145,20 @@ def train(train_seasons, val_seasons, model) -> None:
         sys.exit(1)
 
     click.echo(f"Training seasons: {train_list}  |  Validation: {val_list}")
+    if tune:
+        click.echo(f"Optuna HPO enabled: {tune_trials} trials (this will take a few minutes)...")
     from ironclad.models.trainer import ModelTrainer
     trainer = ModelTrainer()
 
     if model == "all":
         metrics = trainer.train_all(train_list, val_list or None)
+        if tune:
+            click.echo("Note: --tune only applies to game-outcome; re-run with --model game-outcome to tune.")
     elif model == "game-outcome":
-        metrics = {"game_outcome": trainer.train_game_outcome(train_list, val_list or None)}
+        metrics = {"game_outcome": trainer.train_game_outcome(
+            train_list, val_list or None, tune=tune, n_trials=tune_trials)}
+        if tune and "best_hp" in metrics.get("game_outcome", {}):
+            click.echo(f"\nBest hyperparameters: {metrics['game_outcome']['best_hp']}")
     elif model == "score-env":
         metrics = {"score_env": trainer.train_score_env(train_list)}
     elif model == "player-usage":
@@ -227,24 +238,60 @@ def dashboard(run_id) -> None:
 @cli.command()
 @click.option("--val-seasons", default="2025",
               help="Seasons to evaluate against (comma-separated or range)")
-def evaluate(val_seasons) -> None:
+@click.option("--breakdown-by-week", is_flag=True, default=False,
+              help="Show per-week log-loss and margin MAE breakdown.")
+@click.option("--walk-forward", is_flag=True, default=False,
+              help="Walk-forward evaluation: train 2016..N-1, eval N for N=2019..2024.")
+@click.option("--wf-start", default=2019, show_default=True, type=int,
+              help="First evaluation season for walk-forward.")
+@click.option("--wf-end", default=2024, show_default=True, type=int,
+              help="Last evaluation season for walk-forward.")
+def evaluate(val_seasons, breakdown_by_week, walk_forward, wf_start, wf_end) -> None:
     """Evaluate trained models against held-out seasons."""
+    from ironclad.models.trainer import ModelTrainer
+    trainer = ModelTrainer()
+
+    if walk_forward:
+        click.echo(f"Walk-forward evaluation: folds {wf_start}–{wf_end} (training a fresh model per fold)...")
+        result = trainer.walk_forward(folds_start=wf_start, folds_end=wf_end)
+        click.echo(f"\nWalk-forward results ({wf_start}–{wf_end}):")
+        click.echo(f"  {'Season':>6}  {'Train rows':>10}  {'Log-loss':>9}  {'Margin MAE':>10}")
+        click.echo(f"  {'------':>6}  {'----------':>10}  {'---------':>9}  {'----------':>10}")
+        for fold in result["folds"]:
+            ll  = f"{fold['val_log_loss']:.4f}"  if fold["val_log_loss"]   is not None else "   —    "
+            mae = f"{fold['val_margin_mae']:.2f}" if fold["val_margin_mae"] is not None else "   —  "
+            click.echo(f"  {fold['eval_season']:>6}  {fold['train_rows']:>10}  {ll:>9}  {mae:>10}")
+        click.echo(f"\n  Avg log-loss:  {result['avg_log_loss']}")
+        click.echo(f"  Avg margin MAE: {result['avg_margin_mae']}")
+        return
+
     val_list = _parse_seasons(val_seasons)
     if not val_list:
         click.echo("ERROR: Could not parse --val-seasons", err=True)
         sys.exit(1)
 
     click.echo(f"Evaluating on seasons: {val_list}")
-    from ironclad.models.trainer import ModelTrainer
-    trainer = ModelTrainer()
-    metrics = trainer.evaluate(val_list)
+    metrics = trainer.evaluate(val_list, breakdown_by_week=breakdown_by_week)
 
-    if metrics:
-        click.echo("\nEvaluation metrics:")
-        for k, v in metrics.items():
-            click.echo(f"  {k}: {v}")
-    else:
+    if not metrics:
         click.echo("No metrics available (run ironclad train first)")
+        return
+
+    by_week = metrics.pop("by_week", None)
+    click.echo("\nEvaluation metrics:")
+    for k, v in metrics.items():
+        click.echo(f"  {k}: {v}")
+
+    if by_week:
+        click.echo("\nPer-week breakdown:")
+        click.echo(f"  {'Wk':>2}  {'Games':>5}  {'Log-loss':>9}  {'Margin MAE':>10}  {'Margin Bias':>11}")
+        click.echo(f"  {'--':>2}  {'-----':>5}  {'---------':>9}  {'----------':>10}  {'-----------':>11}")
+        for row in by_week:
+            ll = f"{row['log_loss']:.4f}" if row["log_loss"] is not None else "   —    "
+            click.echo(
+                f"  {row['week']:>2}  {row['n_games']:>5}  {ll:>9}"
+                f"  {row['margin_mae']:>10.2f}  {row['margin_bias']:>+11.2f}"
+            )
 
 
 def _parse_seasons(spec: str) -> list[int]:
@@ -264,6 +311,25 @@ def _parse_seasons(spec: str) -> list[int]:
 
 
 # ── odds ──────────────────────────────────────────────────────────────────────
+
+@cli.command()
+def elo() -> None:
+    """Compute Elo team ratings for all seasons and write to gold.elo_ratings.
+
+    Run this after backfilling silver data. Ratings are computed chronologically
+    through all completed games and stored as pre/post-game ratings per team.
+    """
+    from ironclad.features.elo import EloComputer
+    from ironclad.store.connection import get_connection
+    from ironclad.store.schema import create_all_tables
+
+    conn = get_connection()
+    create_all_tables(conn)
+
+    click.echo("Computing Elo ratings for all seasons...")
+    n = EloComputer(conn).compute_and_write()
+    click.echo(f"Wrote {n} Elo rating rows to gold.elo_ratings.")
+
 
 @cli.command()
 def odds() -> None:

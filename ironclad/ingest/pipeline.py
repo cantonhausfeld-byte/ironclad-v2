@@ -12,6 +12,7 @@ from ironclad.ingest.snap_counts import SnapCountIngestor
 from ironclad.ingest.player_stats import PlayerStatsIngestor
 from ironclad.ingest.stadiums import StadiumIngestor
 from ironclad.ingest.weather import WeatherIngestor
+from ironclad.ingest.ngs_data import NGSDataIngestor
 from ironclad.store.connection import get_connection
 from ironclad.store.schema import create_all_tables
 from ironclad.store.writer import BronzeWriter
@@ -33,6 +34,7 @@ class IngestPipeline:
         self._player_stats = PlayerStatsIngestor(writer)
         self._stadiums = StadiumIngestor(writer)
         self._weather = WeatherIngestor(writer)
+        self._ngs = NGSDataIngestor(writer)
         self._conn = conn
 
     def run(
@@ -76,9 +78,24 @@ class IngestPipeline:
             logger.warning("Player stats ingest failed (non-fatal): %s", exc)
             counts["player_stats"] = 0
 
+        logger.info("=== Ingesting NGS tracking data ===")
+        try:
+            counts["ngs_data"] = self._ngs.ingest(seasons)
+        except Exception as exc:
+            logger.warning("NGS ingest failed (non-fatal): %s", exc)
+            counts["ngs_data"] = 0
+
         if include_weather:
             logger.info("=== Ingesting weather ===")
             counts["weather"] = self._ingest_weather()
+
+        logger.info("=== Computing Elo ratings ===")
+        try:
+            from ironclad.features.elo import EloComputer
+            counts["elo_ratings"] = EloComputer(self._conn).compute_and_write()
+        except Exception as exc:
+            logger.warning("Elo computation failed (non-fatal): %s", exc)
+            counts["elo_ratings"] = 0
 
         logger.info("Ingest complete: %s", counts)
         return counts

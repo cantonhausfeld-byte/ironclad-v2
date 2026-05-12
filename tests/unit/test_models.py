@@ -138,3 +138,101 @@ def test_calibrator_passthrough_when_unfitted():
     probs = np.array([0.4, 0.6])
     out = cal.transform(probs)
     assert (out == probs).all()
+
+
+# ── Per-week breakdown ────────────────────────────────────────────────────────
+
+def _make_eval_frames(n: int = 40, seed: int = 42):
+    """Minimal X_val / y_val with home_week column for breakdown testing."""
+    rng = np.random.default_rng(seed)
+    X = pd.DataFrame({"home_week": [(i % 18) + 1 for i in range(n)]})
+    y = pd.DataFrame({
+        "home_win": [i % 2 for i in range(n)],
+        "home_margin": rng.normal(0, 10, size=n).tolist(),
+        "total_score": rng.normal(45, 8, size=n).tolist(),
+    })
+    return X, y
+
+
+def test_breakdown_by_week_structure(conn):
+    from ironclad.models.trainer import ModelTrainer
+    model = GameOutcomeModel()
+    X_train, y_train = _make_eval_frames(n=60, seed=0)
+    model.fit(X_train, y_train)
+
+    trainer = ModelTrainer(conn)
+    X_val, y_val = _make_eval_frames(n=40, seed=99)
+    metrics = trainer._eval_game_outcome(model, X_val, y_val, breakdown_by_week=True)
+
+    assert "by_week" in metrics
+    for row in metrics["by_week"]:
+        assert {"week", "n_games", "log_loss", "margin_mae", "margin_bias"} <= row.keys()
+        assert isinstance(row["week"], int)
+        assert row["n_games"] >= 1
+        assert row["margin_mae"] >= 0.0
+
+
+def test_breakdown_by_week_absent_without_flag(conn):
+    from ironclad.models.trainer import ModelTrainer
+    model = GameOutcomeModel()
+    X_train, y_train = _make_eval_frames(n=60, seed=0)
+    model.fit(X_train, y_train)
+
+    trainer = ModelTrainer(conn)
+    X_val, y_val = _make_eval_frames(n=40, seed=99)
+    metrics = trainer._eval_game_outcome(model, X_val, y_val, breakdown_by_week=False)
+
+    assert "by_week" not in metrics
+    assert "val_log_loss" in metrics
+
+
+# ── Hyperparameter kwargs ─────────────────────────────────────────────────────
+
+def test_game_outcome_model_accepts_hp_kwargs():
+    m = GameOutcomeModel(max_depth=3, n_estimators=50, learning_rate=0.1)
+    assert m._hp["max_depth"] == 3
+    assert m._hp["n_estimators"] == 50
+    assert m._hp["learning_rate"] == pytest.approx(0.1)
+
+
+def test_game_outcome_model_hp_kwargs_used_in_fit():
+    X, y = _make_eval_frames(n=60, seed=7)
+    m = GameOutcomeModel(max_depth=2, n_estimators=20)
+    m.fit(X, y)
+    out = m.predict(X.iloc[:1])
+    assert 0.0 < out["home_win_prob"] < 1.0
+
+
+def test_game_outcome_default_kwargs_unchanged():
+    m = GameOutcomeModel()
+    assert m._hp["max_depth"] == 4
+    assert m._hp["n_estimators"] == 300
+    assert m._hp["subsample"] == pytest.approx(0.8)
+
+
+# ── Walk-forward evaluation ───────────────────────────────────────────────────
+
+def test_walk_forward_returns_folds(conn):
+    from ironclad.models.trainer import ModelTrainer
+    from unittest.mock import patch
+
+    trainer = ModelTrainer(conn)
+
+    def fake_train(train_seasons, val_seasons=None, **kwargs):
+        return {
+            "train_rows": len(train_seasons) * 100,
+            "val_log_loss": 0.67,
+            "val_margin_mae": 10.5,
+            "val_brier": 0.23,
+        }
+
+    with patch.object(trainer, "train_game_outcome", side_effect=fake_train):
+        result = trainer.walk_forward(folds_start=2019, folds_end=2021)
+
+    assert len(result["folds"]) == 3
+    assert result["folds"][0]["eval_season"] == 2019
+    assert result["folds"][2]["eval_season"] == 2021
+    assert result["avg_log_loss"] == pytest.approx(0.67)
+    assert result["avg_margin_mae"] == pytest.approx(10.5)
+    for fold in result["folds"]:
+        assert {"eval_season", "train_rows", "val_log_loss", "val_margin_mae"} <= fold.keys()

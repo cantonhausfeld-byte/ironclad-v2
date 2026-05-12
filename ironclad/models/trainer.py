@@ -38,6 +38,8 @@ class ModelTrainer:
         train_seasons: list[int],
         val_seasons: list[int] | None = None,
         use_lgbm: bool = False,
+        tune: bool = False,
+        n_trials: int = 50,
     ) -> dict[str, Any]:
         if use_lgbm:
             from ironclad.models.team.game_outcome_lgbm import GameOutcomeLGBM
@@ -50,10 +52,17 @@ class ModelTrainer:
             logger.warning("No team feature data found for %s", train_seasons)
             return {}
 
-        model = model_cls()
+        best_hp: dict = {}
+        if tune and val_seasons and model_cls is GameOutcomeModel:
+            best_hp = self._tune_game_outcome(train_seasons, val_seasons, n_trials=n_trials,
+                                              X_train=X_train, y_train=y_train)
+
+        model = model_cls(**best_hp)
         model.fit(X_train, y_train)
 
         metrics: dict[str, Any] = {"train_rows": len(X_train)}
+        if best_hp:
+            metrics["best_hp"] = best_hp
 
         if val_seasons:
             X_val, y_val = self._load_team_data(val_seasons)
@@ -65,6 +74,74 @@ class ModelTrainer:
         self._registry.save(model, metrics)
         logger.info("GameOutcomeModel saved. Metrics: %s", metrics)
         return metrics
+
+    def _tune_game_outcome(
+        self,
+        train_seasons: list[int],
+        val_seasons: list[int],
+        n_trials: int = 50,
+        X_train: pd.DataFrame | None = None,
+        y_train: pd.DataFrame | None = None,
+    ) -> dict:
+        """Run an Optuna study to find the best XGBoost hyperparameters."""
+        import optuna
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+        if X_train is None or y_train is None:
+            X_train, y_train = self._load_team_data(train_seasons)
+        X_val, y_val = self._load_team_data(val_seasons)
+        if X_val.empty:
+            logger.warning("No val data for HPO; skipping tuning")
+            return {}
+
+        def objective(trial: optuna.Trial) -> float:
+            params = {
+                "n_estimators":     trial.suggest_int("n_estimators", 100, 600),
+                "learning_rate":    trial.suggest_float("learning_rate", 0.01, 0.20, log=True),
+                "max_depth":        trial.suggest_int("max_depth", 2, 6),
+                "subsample":        trial.suggest_float("subsample", 0.5, 1.0),
+                "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
+                "min_child_weight": trial.suggest_int("min_child_weight", 1, 20),
+                "gamma":            trial.suggest_float("gamma", 0.0, 5.0),
+            }
+            m = GameOutcomeModel(**params)
+            m.fit(X_train, y_train)
+            return self._eval_game_outcome(m, X_val, y_val)["val_log_loss"]
+
+        study = optuna.create_study(direction="minimize")
+        study.optimize(objective, n_trials=n_trials, show_progress_bar=False)
+        logger.info("Optuna best log-loss: %.4f  params: %s", study.best_value, study.best_params)
+        return study.best_params
+
+    def walk_forward(
+        self,
+        train_start: int = 2016,
+        folds_start: int = 2019,
+        folds_end: int = 2024,
+        tune: bool = False,
+        n_trials: int = 50,
+    ) -> dict[str, Any]:
+        """Walk-forward evaluation: train on 2016..N-1, eval on N for each N in range."""
+        fold_results = []
+        for eval_season in range(folds_start, folds_end + 1):
+            train_seasons = list(range(train_start, eval_season))
+            val_seasons = [eval_season]
+            logger.info("Walk-forward fold: train %s, eval %d", train_seasons, eval_season)
+            metrics = self.train_game_outcome(train_seasons, val_seasons,
+                                              tune=tune, n_trials=n_trials)
+            fold_results.append({
+                "eval_season": eval_season,
+                "train_rows": metrics.get("train_rows", 0),
+                "val_log_loss": metrics.get("val_log_loss"),
+                "val_margin_mae": metrics.get("val_margin_mae"),
+                "val_brier": metrics.get("val_brier"),
+            })
+            logger.info("Fold %d result: %s", eval_season, fold_results[-1])
+
+        valid = [r for r in fold_results if r["val_log_loss"] is not None]
+        avg_ll  = round(sum(r["val_log_loss"]   for r in valid) / len(valid), 4) if valid else None
+        avg_mae = round(sum(r["val_margin_mae"] for r in valid) / len(valid), 2) if valid else None
+        return {"folds": fold_results, "avg_log_loss": avg_ll, "avg_margin_mae": avg_mae}
 
     def train_score_env(self, train_seasons: list[int]) -> dict[str, Any]:
         logger.info("Training ScoreEnvironmentModel on seasons %s", train_seasons)
@@ -246,6 +323,7 @@ class ModelTrainer:
         model: GameOutcomeModel,
         X_val: pd.DataFrame,
         y_val: pd.DataFrame,
+        breakdown_by_week: bool = False,
     ) -> dict:
         from ironclad.models.team.game_outcome import _build_diff_features, TEAM_FEATURES, CLF_FEATURES
         Xf = _build_diff_features(X_val)
@@ -263,14 +341,41 @@ class ModelTrainer:
         margin_pred = model._reg_margin.predict(Xm_reg)
         total_pred = model._reg_total.predict(Xm_reg)
 
-        return {
+        result = {
             "val_log_loss": round(log_loss(labels, probs), 4),
             "val_brier": round(brier_score_loss(labels, probs), 4),
             "val_margin_mae": round(mean_absolute_error(y_val["home_margin"].values, margin_pred), 2),
             "val_total_mae": round(mean_absolute_error(y_val["total_score"].values, total_pred), 2),
         }
 
-    def evaluate(self, val_seasons: list[int]) -> dict[str, Any]:
+        if breakdown_by_week and "home_week" in X_val.columns:
+            from ironclad.eval.metrics import by_week_bias
+            pred_df = pd.DataFrame({
+                "week": X_val["home_week"].values,
+                "home_margin_actual": y_val["home_margin"].values,
+                "home_margin_pred": margin_pred,
+                "home_win_actual": labels,
+                "home_win_prob": probs,
+            })
+            week_bias = by_week_bias(pred_df)
+            week_rows = []
+            for _, row in week_bias.iterrows():
+                w = int(row["week"])
+                mask = pred_df["week"] == w
+                wg = pred_df[mask]
+                wll = round(log_loss(wg["home_win_actual"], wg["home_win_prob"], labels=[0, 1]), 4) if len(wg) >= 2 else None
+                week_rows.append({
+                    "week": w,
+                    "n_games": int(row["n_games"]),
+                    "log_loss": wll,
+                    "margin_mae": float(row["margin_mae"]),
+                    "margin_bias": float(row["margin_bias"]),
+                })
+            result["by_week"] = week_rows
+
+        return result
+
+    def evaluate(self, val_seasons: list[int], breakdown_by_week: bool = False) -> dict[str, Any]:
         """Evaluate all trained models on held-out seasons."""
         X_val, y_val = self._load_team_data(val_seasons)
         if X_val.empty:
@@ -278,7 +383,7 @@ class ModelTrainer:
 
         try:
             model = self._registry.load("game_outcome")
-            metrics = self._eval_game_outcome(model, X_val, y_val)
+            metrics = self._eval_game_outcome(model, X_val, y_val, breakdown_by_week=breakdown_by_week)
             logger.info("Evaluation metrics: %s", metrics)
             return metrics
         except FileNotFoundError:

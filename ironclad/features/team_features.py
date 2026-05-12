@@ -68,6 +68,7 @@ class TeamFeatureBuilder:
         week = int(game["week"])
 
         recent = snap.team_recent_games(team, n=ROLLING_WINDOW)
+        recent_l1 = snap.team_recent_games(team, n=1)
         season_games = snap.team_season_games(team, season)
 
         # ── Offense rolling L4 ────────────────────────────────────────────────
@@ -102,6 +103,7 @@ class TeamFeatureBuilder:
             return float(vals.mean()) if len(vals) else d
 
         rest_days = _compute_rest_days(team, game, snap)
+        elo = _lookup_elo(game["game_id"], team, self._conn)
 
         # Odds context
         implied_total = game.get("total_consensus")
@@ -172,9 +174,20 @@ class TeamFeatureBuilder:
             # Season-to-date
             "off_epa_per_play_std":   std("epa_per_play",   "off_epa_per_play"),
             "def_epa_per_play_std":   def_from_opp("epa_per_play",  "def_epa_per_play"),
+            # Last-1-game EPA (momentum signal)
+            "off_epa_per_play_l1":    _off_l1("epa_per_play", recent_l1),
+            "def_epa_per_play_l1":    _def_l1_from_opp("epa_per_play", recent_l1, snap, team),
+            # Turnovers (rolling L4)
+            "off_turnovers_l4":          off("turnovers",  default=1.5),
+            "def_turnovers_forced_l4":   def_from_opp("turnovers", default=1.5),
+            # Elo (pre-game rating from gold.elo_ratings)
+            "elo_pre_game":              elo,
             # Context
             "rest_days":              rest_days,
-            "is_divisional":          None,
+            "is_divisional":          (
+                _NFL_DIVISIONS.get(team) == _NFL_DIVISIONS.get(opponent)
+                and _NFL_DIVISIONS.get(team) is not None
+            ),
             "implied_total_from_odds": float(implied_total) if pd.notna(implied_total) else None,
             "spread_from_odds":       float(spread) if (is_home and pd.notna(spread)) else
                                       (-float(spread) if pd.notna(spread) else None),
@@ -195,6 +208,51 @@ class TeamFeatureBuilder:
         return feature_row
 
 
+def _off_l1(col: str, recent_l1: pd.DataFrame, default: float = 0.0) -> float | None:
+    if recent_l1.empty or col not in recent_l1.columns:
+        return None
+    vals = recent_l1[col].dropna()
+    return float(vals.iloc[0]) if len(vals) else None
+
+
+def _def_l1_from_opp(col: str, recent_l1: pd.DataFrame, snap, team: str, default: float = 0.0) -> float | None:
+    if recent_l1.empty:
+        return None
+    all_stats = snap.reader.read_table("silver.team_game_stats")
+    opp_rows = all_stats[
+        all_stats["game_id"].isin(recent_l1["game_id"]) &
+        (all_stats["opponent"] == team)
+    ]
+    if opp_rows.empty or col not in opp_rows.columns:
+        return None
+    vals = opp_rows[col].dropna()
+    return float(vals.iloc[0]) if len(vals) else None
+
+
+_NFL_DIVISIONS: dict[str, str] = {
+    # AFC East
+    "BUF": "AFC_EAST", "MIA": "AFC_EAST", "NE": "AFC_EAST", "NYJ": "AFC_EAST",
+    # AFC North
+    "BAL": "AFC_NORTH", "CIN": "AFC_NORTH", "CLE": "AFC_NORTH", "PIT": "AFC_NORTH",
+    # AFC South
+    "HOU": "AFC_SOUTH", "IND": "AFC_SOUTH", "JAX": "AFC_SOUTH", "TEN": "AFC_SOUTH",
+    # AFC West
+    "DEN": "AFC_WEST", "KC": "AFC_WEST",
+    "LAC": "AFC_WEST", "SD": "AFC_WEST",   # SD relocated → LAC 2017
+    "LV": "AFC_WEST", "OAK": "AFC_WEST",   # OAK relocated → LV 2020
+    # NFC East
+    "DAL": "NFC_EAST", "NYG": "NFC_EAST", "PHI": "NFC_EAST",
+    "WAS": "NFC_EAST", "WSH": "NFC_EAST",
+    # NFC North
+    "CHI": "NFC_NORTH", "DET": "NFC_NORTH", "GB": "NFC_NORTH", "MIN": "NFC_NORTH",
+    # NFC South
+    "ATL": "NFC_SOUTH", "CAR": "NFC_SOUTH", "NO": "NFC_SOUTH", "TB": "NFC_SOUTH",
+    # NFC West
+    "ARI": "NFC_WEST", "LAR": "NFC_WEST", "STL": "NFC_WEST",  # STL relocated → LAR 2016
+    "SEA": "NFC_WEST", "SF": "NFC_WEST",
+}
+
+
 def _compute_rest_days(team: str, game: pd.Series, snap: FeatureSnapshot) -> int | None:
     games = snap.reader.read_as_of("silver.games", ts_col="_silver_ts")
     team_games = games[(games["home_team"] == team) | (games["away_team"] == team)].copy()
@@ -210,6 +268,17 @@ def _surface_grass(surface) -> bool | None:
     if surface is None:
         return None
     return "grass" in str(surface).lower()
+
+
+def _lookup_elo(game_id: str, team: str, conn) -> float | None:
+    try:
+        row = conn.execute(
+            "SELECT elo_pre_game FROM gold.elo_ratings WHERE game_id = ? AND team = ?",
+            [game_id, team],
+        ).fetchone()
+        return float(row[0]) if row else None
+    except Exception:
+        return None
 
 
 def _parse_kickoff(gameday, gametime_local) -> datetime:
