@@ -281,6 +281,24 @@ def _bronze(conn: duckdb.DuckDBPyConnection) -> None:
     """)
 
     conn.execute("""
+    CREATE TABLE IF NOT EXISTS bronze.ngs_rushing (
+        season                          INTEGER NOT NULL,
+        week                            INTEGER NOT NULL,
+        player_id                       VARCHAR NOT NULL,
+        player_name                     VARCHAR,
+        position                        VARCHAR,
+        team                            VARCHAR,
+        season_type                     VARCHAR,
+        avg_rush_yards_over_expected    FLOAT,
+        avg_time_to_los                 FLOAT,
+        efficiency                      FLOAT,
+        rush_attempts                   INTEGER,
+        _ingest_ts                      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (season, week, player_id)
+    )
+    """)
+
+    conn.execute("""
     CREATE TABLE IF NOT EXISTS bronze.ftn_charting (
         game_id          VARCHAR NOT NULL,
         season           INTEGER NOT NULL,
@@ -608,10 +626,11 @@ def _gold(conn: duckdb.DuckDBPyConnection) -> None:
         td_rate_per_carry_l4     FLOAT,
         adot_l4                  FLOAT,
         -- NGS advanced tracking (rolling L4, NULL before 2018 or if not backfilled)
-        separation_l4            FLOAT,
-        yac_above_expected_l4    FLOAT,
-        cpoe_l4                  FLOAT,
-        aggressiveness_l4        FLOAT,
+        separation_l4                FLOAT,
+        yac_above_expected_l4        FLOAT,
+        cpoe_l4                      FLOAT,
+        aggressiveness_l4            FLOAT,
+        ryoe_per_att_l4              FLOAT,
         -- Opponent defense
         opp_def_pass_epa_l4      FLOAT,
         opp_def_rush_epa_l4      FLOAT,
@@ -799,6 +818,7 @@ _EXPECTED_COLS: dict[str, list[tuple[str, str]]] = {
         ("yac_above_expected_l4",  "FLOAT"),
         ("cpoe_l4",                "FLOAT"),
         ("aggressiveness_l4",      "FLOAT"),
+        ("ryoe_per_att_l4",        "FLOAT"),
     ],
 }
 

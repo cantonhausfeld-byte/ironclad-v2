@@ -115,6 +115,19 @@ class FeatureSnapshot:
             df = df.merge(past, on=["season", "week"], how="inner")
         return df.sort_values(["season", "week"]).tail(n)
 
+    def player_ngs_rushing(self, player_id: str, n: int = 4) -> pd.DataFrame:
+        """Last n NGS rushing rows for player from completed games before cutoff."""
+        df = self._read_cached("bronze.ngs_rushing")
+        df = df[df["player_id"] == player_id].copy()
+        if df.empty:
+            return df
+        past = self._past_week_pairs()
+        if not past.empty:
+            df["season"] = df["season"].astype(int)
+            df["week"] = df["week"].astype(int)
+            df = df.merge(past, on=["season", "week"], how="inner")
+        return df.sort_values(["season", "week"]).tail(n)
+
     # ── Game context ──────────────────────────────────────────────────────────
 
     def game_row(self, game_id: str) -> pd.Series | None:

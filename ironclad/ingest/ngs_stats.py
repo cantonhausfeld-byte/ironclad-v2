@@ -1,4 +1,4 @@
-"""Ingest NFL Next Gen Stats (NGS) receiving and passing data via nflreadpy."""
+"""Ingest NFL Next Gen Stats (NGS) receiving, passing, and rushing data via nflreadpy."""
 from __future__ import annotations
 
 import logging
@@ -22,6 +22,12 @@ _PASSING_KEEP = [
     "completion_percentage_above_expectation", "attempts", "completions",
 ]
 
+_RUSHING_KEEP = [
+    "season", "week", "player_id", "player_name", "position", "team",
+    "season_type", "avg_rush_yards_over_expected", "avg_time_to_los",
+    "efficiency", "rush_attempts",
+]
+
 _RECEIVING_RENAMES = {
     "player_gsis_id": "player_id",
     "player_display_name": "player_name",
@@ -32,6 +38,13 @@ _RECEIVING_RENAMES = {
 _PASSING_RENAMES = {
     "player_gsis_id": "player_id",
     "player_display_name": "player_name",
+    "team_abbr": "team",
+}
+
+_RUSHING_RENAMES = {
+    "player_gsis_id": "player_id",
+    "player_display_name": "player_name",
+    "player_position": "position",
     "team_abbr": "team",
 }
 
@@ -76,6 +89,26 @@ class NGSPassingIngestor(BaseIngestor):
         return total
 
 
+class NGSRushingIngestor(BaseIngestor):
+    def __init__(self, writer: BronzeWriter | None = None) -> None:
+        self._writer = writer or BronzeWriter()
+
+    def _ingest(self, seasons: list[int]) -> int:
+        import nflreadpy as nfl
+        logger.info("Fetching NGS rushing stats for seasons %s", seasons)
+        total = 0
+        for season in seasons:
+            try:
+                raw = nfl.load_nextgen_stats(seasons=season, stat_type="rushing").to_pandas()
+                df = _clean_rushing(raw)
+                if not df.empty:
+                    total += self._writer.write_ngs_rushing(df)
+                    logger.info("NGS rushing season %d: wrote %d rows", season, len(df))
+            except Exception as exc:
+                logger.warning("NGS rushing failed for season %d: %s", season, exc)
+        return total
+
+
 def _clean_receiving(raw: pd.DataFrame) -> pd.DataFrame:
     for src, dst in _RECEIVING_RENAMES.items():
         if src in raw.columns and dst not in raw.columns:
@@ -117,6 +150,28 @@ def _clean_passing(raw: pd.DataFrame) -> pd.DataFrame:
         "avg_time_to_throw", "avg_intended_air_yards", "aggressiveness",
         "completion_percentage_above_expectation",
     ]
+    for c in int_cols:
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0).astype(int)
+    for c in float_cols:
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors="coerce")
+    return df
+
+
+def _clean_rushing(raw: pd.DataFrame) -> pd.DataFrame:
+    for src, dst in _RUSHING_RENAMES.items():
+        if src in raw.columns and dst not in raw.columns:
+            raw = raw.rename(columns={src: dst})
+    if "season_type" in raw.columns:
+        raw = raw[raw["season_type"] == "REG"]
+    df = _safe_select(raw, _RUSHING_KEEP)
+    df = df.dropna(subset=["player_id", "season", "week"])
+    df["player_id"] = df["player_id"].astype(str)
+    df["season"] = df["season"].astype(int)
+    df["week"] = df["week"].astype(int)
+    int_cols = ["rush_attempts"]
+    float_cols = ["avg_rush_yards_over_expected", "avg_time_to_los", "efficiency"]
     for c in int_cols:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0).astype(int)

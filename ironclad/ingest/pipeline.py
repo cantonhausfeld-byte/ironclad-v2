@@ -13,7 +13,7 @@ from ironclad.ingest.injuries import InjuryIngestor
 from ironclad.ingest.depth_charts import DepthChartIngestor
 from ironclad.ingest.snap_counts import SnapCountIngestor
 from ironclad.ingest.player_stats import PlayerStatsIngestor
-from ironclad.ingest.ngs_stats import NGSReceivingIngestor, NGSPassingIngestor
+from ironclad.ingest.ngs_stats import NGSReceivingIngestor, NGSPassingIngestor, NGSRushingIngestor
 from ironclad.ingest.stadiums import StadiumIngestor
 from ironclad.ingest.weather import WeatherIngestor
 from ironclad.store.connection import get_connection
@@ -37,6 +37,7 @@ class IngestPipeline:
         self._player_stats = PlayerStatsIngestor(writer)
         self._ngs_receiving = NGSReceivingIngestor(writer)
         self._ngs_passing = NGSPassingIngestor(writer)
+        self._ngs_rushing = NGSRushingIngestor(writer)
         self._player_ids = PlayerIDIngestor(writer)
         self._pfr_pressure = PFRPressureIngestor(writer)
         self._ftn_charting = FTNChartingIngestor(writer)
@@ -105,6 +106,13 @@ class IngestPipeline:
         except Exception as exc:
             logger.warning("NGS passing ingest failed (non-fatal): %s", exc)
             counts["ngs_passing"] = 0
+
+        logger.info("=== Ingesting NGS rushing stats ===")
+        try:
+            counts["ngs_rushing"] = self._ngs_rushing.ingest(seasons)
+        except Exception as exc:
+            logger.warning("NGS rushing ingest failed (non-fatal): %s", exc)
+            counts["ngs_rushing"] = 0
 
         logger.info("=== Ingesting PFR pressure stats ===")
         try:

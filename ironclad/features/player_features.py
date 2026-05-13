@@ -101,6 +101,7 @@ class PlayerFeatureBuilder:
         recent_status = snap.player_recent_status(pid, int(game["season"]), int(game["week"]), n=ROLLING_WINDOW)
         ngs_recv = snap.player_ngs_receiving(pid, n=ROLLING_WINDOW)
         ngs_pass = snap.player_ngs_passing(pid, n=ROLLING_WINDOW)
+        ngs_rush = snap.player_ngs_rushing(pid, n=ROLLING_WINDOW)
 
         # Team volume denominators from rolling L4
         team_pass_att = float(team_recent["pass_attempts"].mean()) if not team_recent.empty and "pass_attempts" in team_recent.columns else 30.0
@@ -192,6 +193,11 @@ class PlayerFeatureBuilder:
             if not ngs_pass.empty and "aggressiveness" in ngs_pass.columns and ngs_pass["aggressiveness"].notna().any()
             else None
         )
+        ryoe_per_att_l4 = (
+            float(ngs_rush["avg_rush_yards_over_expected"].dropna().mean())
+            if not ngs_rush.empty and "avg_rush_yards_over_expected" in ngs_rush.columns and ngs_rush["avg_rush_yards_over_expected"].notna().any()
+            else None
+        )
 
         def opp_feat(col, default=None):
             if opp_feats.empty or col not in opp_feats.columns:
@@ -238,6 +244,7 @@ class PlayerFeatureBuilder:
             "yac_above_expected_l4":    yac_above_expected_l4,
             "cpoe_l4":                  cpoe_l4,
             "aggressiveness_l4":        aggressiveness_l4,
+            "ryoe_per_att_l4":          ryoe_per_att_l4,
             "opp_def_pass_epa_l4":      opp_feat("def_epa_per_play_l4"),
             "opp_def_rush_epa_l4":      opp_feat("def_rush_epa_l4"),
             "opp_def_sack_rate_l4":     opp_feat("def_sack_rate_l4"),
