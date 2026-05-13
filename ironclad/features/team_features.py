@@ -78,6 +78,14 @@ class TeamFeatureBuilder:
             vals = recent[col].dropna()
             return float(vals.mean()) if len(vals) else d
 
+        # ── Computed rate from two columns (sum/sum) over recent games ─────────
+        def off_rate(num_col, denom_col, default=0.0):
+            if recent.empty:
+                return default
+            num = recent[num_col].dropna().sum() if num_col in recent.columns else 0
+            denom = recent[denom_col].dropna().sum() if denom_col in recent.columns else 0
+            return float(num / denom) if denom > 0 else default
+
         # ── Defense: opponent stats FROM recent opponents against this team ───
         def def_from_opp(col, default_key=None, default=None):
             d = default if default is not None else LEAGUE_PRIORS.get(default_key or col, 0.0)
@@ -170,6 +178,15 @@ class TeamFeatureBuilder:
             "def_third_down_pct_l4":  def_from_opp("third_down_pct", default=0.40),
             # Phase 2A: fourth-down aggressiveness
             "off_fourth_down_att_l4": off("fourth_down_attempts", default=0.0),
+            # Phase 2.3: PFR pressure/blitz rates
+            "off_pressure_rate_l4":          off("pressure_rate",       default=0.208),
+            "def_pressure_rate_allowed_l4":  def_from_opp("pressure_rate", default=0.208),
+            "off_blitz_rate_l4":             off_rate("blitzes_faced", "pass_attempts", default=0.15),
+            "def_blitz_rate_allowed_l4":     def_from_opp("pressure_rate", default=0.15),
+            # Phase 2.5: FTN charting rolling L4 (game-level averages; NULL before 2022)
+            "game_play_action_rate_l4":      off("play_action_rate",  default=0.22),
+            "game_avg_blitzers_l4":          off("avg_blitzers_ftn",  default=0.20),
+            "game_avg_box_count_l4":         off("avg_box_count",     default=6.4),
             # Season-to-date
             "off_epa_per_play_std":   std("epa_per_play",   "off_epa_per_play"),
             "def_epa_per_play_std":   def_from_opp("epa_per_play",  "def_epa_per_play"),

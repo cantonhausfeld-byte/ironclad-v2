@@ -25,6 +25,16 @@ class SilverTransformer:
         counts["team_game_stats"] = self._build_team_game_stats(seasons)
         counts["player_game_stats"] = self._build_player_game_stats(seasons)
         counts["player_weekly_status"] = self._build_player_weekly_status(seasons)
+        # Optional enrichment from external data sources
+        for season in (seasons or []):
+            try:
+                self._enrich_with_pfr(season)
+            except Exception as exc:
+                logger.debug("PFR pressure enrichment skipped for %d: %s", season, exc)
+            try:
+                self._enrich_with_ftn(season)
+            except Exception as exc:
+                logger.debug("FTN charting enrichment skipped for %d: %s", season, exc)
         return counts
 
     # ── silver.games ──────────────────────────────────────────────────────────
@@ -346,6 +356,62 @@ class SilverTransformer:
             df["snap_rate"] = None
 
         return self._writer.write_player_weekly_status(df)
+
+    # ── PFR pressure enrichment ───────────────────────────────────────────────
+
+    def _enrich_with_pfr(self, season: int) -> None:
+        """UPDATE silver.team_game_stats with PFR pressure rates for one season."""
+        self._conn.execute("""
+            UPDATE silver.team_game_stats AS s
+            SET pressure_rate   = p.pressure_rate,
+                pressures_faced = p.pressures_faced,
+                blitzes_faced   = p.blitzes_faced,
+                hurries_faced   = p.hurries_faced
+            FROM (
+                SELECT
+                    game_id,
+                    team,
+                    AVG(times_pressured_pct)          AS pressure_rate,
+                    SUM(times_pressured)               AS pressures_faced,
+                    SUM(times_blitzed)                 AS blitzes_faced,
+                    SUM(times_hurried)                 AS hurries_faced
+                FROM bronze.pfr_pressure_weekly
+                WHERE season = ?
+                GROUP BY game_id, team
+            ) p
+            WHERE s.game_id = p.game_id
+              AND s.team = p.team
+              AND s.season = ?
+        """, [season, season])
+        logger.debug("PFR pressure enrichment done for season %d", season)
+
+    # ── FTN charting enrichment ───────────────────────────────────────────────
+
+    def _enrich_with_ftn(self, season: int) -> None:
+        """UPDATE silver.team_game_stats with FTN game-level aggregates for one season."""
+        self._conn.execute("""
+            UPDATE silver.team_game_stats AS s
+            SET play_action_rate = f.play_action_rate,
+                motion_rate      = f.motion_rate,
+                avg_blitzers_ftn = f.avg_blitzers_ftn,
+                avg_box_count    = f.avg_box_count
+            FROM (
+                SELECT
+                    game_id,
+                    team,
+                    AVG(CAST(is_play_action AS INTEGER)) AS play_action_rate,
+                    AVG(CAST(is_motion AS INTEGER))      AS motion_rate,
+                    AVG(n_blitzers)                     AS avg_blitzers_ftn,
+                    AVG(n_defense_box)                  AS avg_box_count
+                FROM bronze.ftn_charting
+                WHERE season = ?
+                GROUP BY game_id, team
+            ) f
+            WHERE s.game_id = f.game_id
+              AND s.team = f.team
+              AND s.season = ?
+        """, [season, season])
+        logger.debug("FTN charting enrichment done for season %d", season)
 
     @staticmethod
     def _season_filter(col: str, seasons: list[int] | None) -> str:

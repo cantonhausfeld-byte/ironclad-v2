@@ -281,6 +281,50 @@ def _bronze(conn: duckdb.DuckDBPyConnection) -> None:
     """)
 
     conn.execute("""
+    CREATE TABLE IF NOT EXISTS bronze.ftn_charting (
+        game_id          VARCHAR NOT NULL,
+        season           INTEGER NOT NULL,
+        week             INTEGER NOT NULL,
+        team             VARCHAR,
+        n_blitzers        FLOAT,
+        n_pass_rushers    FLOAT,
+        n_defense_box     FLOAT,
+        is_play_action    INTEGER DEFAULT 0,
+        is_motion         INTEGER DEFAULT 0,
+        _ingest_ts        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+    """)
+
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS bronze.pfr_pressure_weekly (
+        season              INTEGER NOT NULL,
+        week                INTEGER NOT NULL,
+        game_id             VARCHAR,
+        team                VARCHAR NOT NULL,
+        times_pressured     INTEGER DEFAULT 0,
+        times_pressured_pct FLOAT,
+        times_blitzed       INTEGER DEFAULT 0,
+        times_hurried       INTEGER DEFAULT 0,
+        times_hit           INTEGER DEFAULT 0,
+        times_sacked        INTEGER DEFAULT 0,
+        _ingest_ts          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+    """)
+
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS bronze.player_id_mapping (
+        gsis_id     VARCHAR NOT NULL PRIMARY KEY,
+        pfr_id      VARCHAR,
+        nfl_id      VARCHAR,
+        espn_id     VARCHAR,
+        player_name VARCHAR,
+        position    VARCHAR,
+        team        VARCHAR,
+        _ingest_ts  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+    """)
+
+    conn.execute("""
     CREATE TABLE IF NOT EXISTS bronze.stadiums (
         stadium_id   VARCHAR NOT NULL PRIMARY KEY,
         stadium_name VARCHAR NOT NULL,
@@ -370,6 +414,16 @@ def _silver(conn: duckdb.DuckDBPyConnection) -> None:
         total_air_yards  FLOAT,
         -- Pressure proxy
         sack_rate        FLOAT,
+        -- Phase 2.3: PFR pressure/blitz (enriched post-ingest)
+        pressure_rate         FLOAT,
+        pressures_faced       INTEGER,
+        blitzes_faced         INTEGER,
+        hurries_faced         INTEGER,
+        -- Phase 2.5: FTN charting (enriched post-ingest; 2022+ only)
+        play_action_rate      FLOAT,
+        motion_rate           FLOAT,
+        avg_blitzers_ftn      FLOAT,
+        avg_box_count         FLOAT,
         -- Phase 2A additions
         avg_cpoe              FLOAT,
         avg_xpass             FLOAT,
@@ -467,6 +521,15 @@ def _gold(conn: duckdb.DuckDBPyConnection) -> None:
         def_success_rate_l4      FLOAT,
         def_points_allowed_l4    FLOAT,
         def_sack_rate_l4         FLOAT,
+        -- Phase 2.3: PFR pressure rolling L4
+        off_pressure_rate_l4         FLOAT,
+        def_pressure_rate_allowed_l4 FLOAT,
+        off_blitz_rate_l4            FLOAT,
+        def_blitz_rate_allowed_l4    FLOAT,
+        -- Phase 2.5: FTN charting rolling L4 (NULL before 2022)
+        game_play_action_rate_l4     FLOAT,
+        game_avg_blitzers_l4         FLOAT,
+        game_avg_box_count_l4        FLOAT,
         -- Phase 2A rolling L4 additions
         off_cpoe_l4              FLOAT,
         def_cpoe_allowed_l4      FLOAT,
@@ -672,6 +735,14 @@ _EXPECTED_COLS: dict[str, list[tuple[str, str]]] = {
     ],
     "silver.team_game_stats": [
         ("_silver_ts",            "TIMESTAMPTZ DEFAULT NOW()"),
+        ("pressure_rate",         "FLOAT"),
+        ("pressures_faced",       "INTEGER"),
+        ("blitzes_faced",         "INTEGER"),
+        ("hurries_faced",         "INTEGER"),
+        ("play_action_rate",      "FLOAT"),
+        ("motion_rate",           "FLOAT"),
+        ("avg_blitzers_ftn",      "FLOAT"),
+        ("avg_box_count",         "FLOAT"),
         ("avg_cpoe",              "FLOAT"),
         ("avg_xpass",             "FLOAT"),
         ("qb_hits",               "INTEGER"),
@@ -694,6 +765,13 @@ _EXPECTED_COLS: dict[str, list[tuple[str, str]]] = {
         ("_silver_ts", "TIMESTAMPTZ DEFAULT NOW()"),
     ],
     "gold.team_game_features": [
+        ("off_pressure_rate_l4",          "FLOAT"),
+        ("def_pressure_rate_allowed_l4",  "FLOAT"),
+        ("off_blitz_rate_l4",             "FLOAT"),
+        ("def_blitz_rate_allowed_l4",     "FLOAT"),
+        ("game_play_action_rate_l4",      "FLOAT"),
+        ("game_avg_blitzers_l4",          "FLOAT"),
+        ("game_avg_box_count_l4",         "FLOAT"),
         ("target_home_win",       "BOOLEAN"),
         ("target_home_margin",    "INTEGER"),
         ("target_total_score",    "INTEGER"),

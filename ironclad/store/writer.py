@@ -113,6 +113,21 @@ class BronzeWriter(_BaseWriter):
         df["_ingest_ts"] = _now()
         return self._upsert(df, "bronze.ngs_passing", ["season", "week", "player_id"])
 
+    def write_ftn_charting(self, df: pd.DataFrame) -> int:
+        df = df.copy()
+        df["_ingest_ts"] = _now()
+        return self._append(df, "bronze.ftn_charting")
+
+    def write_pfr_pressure_weekly(self, df: pd.DataFrame) -> int:
+        df = df.copy()
+        df["_ingest_ts"] = _now()
+        return self._append(df, "bronze.pfr_pressure_weekly")
+
+    def write_player_id_mapping(self, df: pd.DataFrame) -> int:
+        df = df.copy()
+        df["_ingest_ts"] = _now()
+        return self._upsert(df, "bronze.player_id_mapping", ["gsis_id"])
+
 
 class SilverWriter(_BaseWriter):
     def write_games(self, df: pd.DataFrame) -> int:

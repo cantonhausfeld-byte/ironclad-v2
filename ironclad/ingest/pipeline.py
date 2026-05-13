@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import logging
 
+from ironclad.ingest.ftn_charting import FTNChartingIngestor
+from ironclad.ingest.pfr_pressure import PFRPressureIngestor
+from ironclad.ingest.player_ids import PlayerIDIngestor
 from ironclad.ingest.schedules import ScheduleIngestor
 from ironclad.ingest.play_by_play import PBPIngestor
 from ironclad.ingest.rosters import RosterIngestor
@@ -34,6 +37,9 @@ class IngestPipeline:
         self._player_stats = PlayerStatsIngestor(writer)
         self._ngs_receiving = NGSReceivingIngestor(writer)
         self._ngs_passing = NGSPassingIngestor(writer)
+        self._player_ids = PlayerIDIngestor(writer)
+        self._pfr_pressure = PFRPressureIngestor(writer)
+        self._ftn_charting = FTNChartingIngestor(writer)
         self._stadiums = StadiumIngestor(writer)
         self._weather = WeatherIngestor(writer)
         self._conn = conn
@@ -45,6 +51,13 @@ class IngestPipeline:
         include_weather: bool = True,
     ) -> dict[str, int]:
         counts: dict[str, int] = {}
+
+        logger.info("=== Ingesting player ID crosswalk ===")
+        try:
+            counts["player_ids"] = self._player_ids.ingest()
+        except Exception as exc:
+            logger.warning("Player ID mapping ingest failed (non-fatal): %s", exc)
+            counts["player_ids"] = 0
 
         logger.info("=== Ingesting stadiums ===")
         counts["stadiums"] = self._stadiums.ingest()
@@ -92,6 +105,20 @@ class IngestPipeline:
         except Exception as exc:
             logger.warning("NGS passing ingest failed (non-fatal): %s", exc)
             counts["ngs_passing"] = 0
+
+        logger.info("=== Ingesting PFR pressure stats ===")
+        try:
+            counts["pfr_pressure"] = self._pfr_pressure.ingest(seasons)
+        except Exception as exc:
+            logger.warning("PFR pressure ingest failed (non-fatal): %s", exc)
+            counts["pfr_pressure"] = 0
+
+        logger.info("=== Ingesting FTN charting data ===")
+        try:
+            counts["ftn_charting"] = self._ftn_charting.ingest(seasons)
+        except Exception as exc:
+            logger.warning("FTN charting ingest failed (non-fatal): %s", exc)
+            counts["ftn_charting"] = 0
 
         if include_weather:
             logger.info("=== Ingesting weather ===")
