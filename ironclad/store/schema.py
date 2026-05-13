@@ -639,6 +639,11 @@ def _gold(conn: duckdb.DuckDBPyConnection) -> None:
         team_off_pass_rate_l4    FLOAT,
         team_off_epa_l4          FLOAT,
         team_implied_total        FLOAT,
+        -- Game context (weather / venue)
+        wind_mph                 FLOAT,
+        temp_f                   FLOAT,
+        is_dome                  BOOLEAN,
+        altitude_ft              INTEGER,
         -- Targets (NULL until game played)
         target_targets           FLOAT,
         target_carries           FLOAT,
@@ -819,6 +824,10 @@ _EXPECTED_COLS: dict[str, list[tuple[str, str]]] = {
         ("cpoe_l4",                "FLOAT"),
         ("aggressiveness_l4",      "FLOAT"),
         ("ryoe_per_att_l4",        "FLOAT"),
+        ("wind_mph",               "FLOAT"),
+        ("temp_f",                 "FLOAT"),
+        ("is_dome",                "BOOLEAN"),
+        ("altitude_ft",            "INTEGER"),
     ],
 }
 

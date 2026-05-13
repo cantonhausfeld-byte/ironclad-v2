@@ -251,6 +251,11 @@ class PlayerFeatureBuilder:
             "team_off_pass_rate_l4":    own_feat("off_pass_rate_l4"),
             "team_off_epa_l4":          own_feat("off_epa_per_play_l4"),
             "team_implied_total":       own_feat("implied_total_from_odds"),
+            # Game context (weather / venue) — matches PlayerEfficiencyModel feature set
+            "wind_mph":    game.get("wind_mph"),
+            "temp_f":      game.get("temp_f"),
+            "is_dome":     game.get("is_dome"),
+            "altitude_ft": game.get("altitude_ft"),
             # Targets filled post-game
             "target_targets": None, "target_carries": None,
             "target_receptions": None, "target_rec_yards": None,

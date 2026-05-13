@@ -91,3 +91,50 @@ def test_build_for_game_non_skill_positions_excluded():
     builder = PlayerFeatureBuilder(conn)
     df = builder.build_for_game("2023_05_KC_BAL", cutoff)
     assert df.empty
+
+
+# ── Weather context tests ─────────────────────────────────────────────────────
+
+def test_player_game_features_has_weather_columns():
+    """gold.player_game_features schema includes weather/venue columns."""
+    conn = _conn()
+    cols = {
+        row[0]
+        for row in conn.execute(
+            "SELECT column_name FROM information_schema.columns "
+            "WHERE table_schema = 'gold' AND table_name = 'player_game_features'"
+        ).fetchall()
+    }
+    for col in ("wind_mph", "temp_f", "is_dome", "altitude_ft"):
+        assert col in cols, f"{col} missing from gold.player_game_features"
+
+
+def test_player_features_weather_populated_from_game():
+    """build_for_game propagates weather fields from silver.games into feature rows."""
+    from ironclad.features.player_features import PlayerFeatureBuilder
+
+    conn = _conn()
+    game_id = "2024_10_KC_DEN"
+    conn.execute("""
+        INSERT INTO silver.games
+            (game_id, season, season_type, week, gameday, away_team, home_team,
+             temp_f, wind_mph, is_dome, altitude_ft)
+        VALUES (?, 2024, 'REG', 10, '2024-11-10', 'KC', 'DEN',
+                28.0, 12.5, false, 5280)
+    """, [game_id])
+    conn.execute("""
+        INSERT INTO silver.player_weekly_status
+            (season, week, player_id, player_name, team, position, availability)
+        VALUES (2024, 10, 'RB1', 'Test RB', 'KC', 'RB', 1.0)
+    """)
+
+    cutoff = datetime(2024, 11, 10, 20, 0, tzinfo=timezone.utc)
+    builder = PlayerFeatureBuilder(conn)
+    df = builder.build_for_game(game_id, cutoff)
+
+    assert not df.empty, "Expected at least one player row"
+    row = df.iloc[0]
+    assert row["temp_f"] == pytest.approx(28.0)
+    assert row["wind_mph"] == pytest.approx(12.5)
+    assert row["is_dome"] == False
+    assert row["altitude_ft"] == 5280
