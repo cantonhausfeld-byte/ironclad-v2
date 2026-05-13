@@ -22,10 +22,19 @@ logger = logging.getLogger(__name__)
 
 
 class MonteCarloEngine:
-    def __init__(self, n_draws: int = DEFAULT_N_DRAWS, seed: int = 42) -> None:
+    def __init__(
+        self,
+        n_draws: int = DEFAULT_N_DRAWS,
+        seed: int = 42,
+        use_drive_sim: bool = False,
+    ) -> None:
         self.n_draws = n_draws
         self.seed = seed
-        self._game_draw = GameDraw()
+        if use_drive_sim:
+            from ironclad.simulation.drive_sim import DriveSimulator
+            self._game_draw = DriveSimulator()
+        else:
+            self._game_draw = GameDraw()
         self._player_draw = PlayerDraw()
         self._reconciler = Reconciler()
         # Load trained models if available, fall back to stubs

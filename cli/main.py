@@ -80,7 +80,9 @@ def weekly(season, week) -> None:
               help="Number of Monte Carlo draws")
 @click.option("--backfill-if-missing", is_flag=True, default=False,
               help="Auto-backfill season data if game not found")
-def report(game_id, home, away, week, season, fmt, output_dir, n_draws, backfill_if_missing) -> None:
+@click.option("--use-drive-sim", is_flag=True, default=False,
+              help="Use drive-level Markov chain simulation instead of score-distribution GameDraw")
+def report(game_id, home, away, week, season, fmt, output_dir, n_draws, backfill_if_missing, use_drive_sim) -> None:
     """Generate a pregame matchup report."""
     # Resolve game_id from team names if not provided
     if not game_id:
@@ -95,7 +97,7 @@ def report(game_id, home, away, week, season, fmt, output_dir, n_draws, backfill
     click.echo(f"Generating report for {game_id}  (n_draws={n_draws})")
     from ironclad.workflow.matchup import MatchupWorkflow
     try:
-        path = MatchupWorkflow(n_draws=n_draws).run(
+        path = MatchupWorkflow(n_draws=n_draws, use_drive_sim=use_drive_sim).run(
             game_id=game_id,
             output_dir=Path(output_dir),
             fmt=fmt,
@@ -375,7 +377,9 @@ def run_weekly(season, week, n_draws, kelly_fraction, min_ev, no_odds) -> None:
 @click.option("--backfill-if-missing", is_flag=True, default=False)
 @click.option("--save", is_flag=True, default=False,
               help="Persist edges to gold.betting_edges for later settling")
-def edges(game_id, props_file, n_draws, kelly_fraction, min_ev, backfill_if_missing, save) -> None:
+@click.option("--use-drive-sim", is_flag=True, default=False,
+              help="Use drive-level Markov chain simulation instead of score-distribution GameDraw")
+def edges(game_id, props_file, n_draws, kelly_fraction, min_ev, backfill_if_missing, save, use_drive_sim) -> None:
     """Compute +EV player props from a Monte Carlo simulation against market lines."""
     from ironclad.betting.props import PropAnalyzer, load_prop_lines, load_prop_lines_from_db
     from ironclad.workflow.matchup import MatchupWorkflow
@@ -402,7 +406,7 @@ def edges(game_id, props_file, n_draws, kelly_fraction, min_ev, backfill_if_miss
         click.echo(f"Loaded {len(prop_lines)} prop lines from bronze.player_props")
 
     click.echo(f"Running simulation for {game_id} (n_draws={n_draws})...")
-    result, _, _, _ = MatchupWorkflow(n_draws=n_draws).simulate(
+    result, _, _, _ = MatchupWorkflow(n_draws=n_draws, use_drive_sim=use_drive_sim).simulate(
         game_id, backfill_if_missing=backfill_if_missing,
     )
 

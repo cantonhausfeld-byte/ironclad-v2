@@ -26,9 +26,15 @@ logger = logging.getLogger(__name__)
 
 
 class MatchupWorkflow:
-    def __init__(self, n_draws: int = DEFAULT_N_DRAWS, seed: int = 42) -> None:
+    def __init__(
+        self,
+        n_draws: int = DEFAULT_N_DRAWS,
+        seed: int = 42,
+        use_drive_sim: bool = False,
+    ) -> None:
         self.n_draws = n_draws
         self.seed = seed
+        self.use_drive_sim = use_drive_sim
 
     def run(
         self,
@@ -119,7 +125,7 @@ class MatchupWorkflow:
         if home_feats.empty or away_feats.empty:
             raise RuntimeError(f"Team features missing for {game_id}")
 
-        engine = MonteCarloEngine(n_draws=self.n_draws, seed=self.seed)
+        engine = MonteCarloEngine(n_draws=self.n_draws, seed=self.seed, use_drive_sim=self.use_drive_sim)
         result = engine.run(
             home_team=home_team,
             away_team=away_team,
