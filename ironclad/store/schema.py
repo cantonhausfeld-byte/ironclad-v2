@@ -548,6 +548,7 @@ def _gold(conn: duckdb.DuckDBPyConnection) -> None:
         separation_l4            FLOAT,
         yac_above_expected_l4    FLOAT,
         cpoe_l4                  FLOAT,
+        aggressiveness_l4        FLOAT,
         -- Opponent defense
         opp_def_pass_epa_l4      FLOAT,
         opp_def_rush_epa_l4      FLOAT,
@@ -719,6 +720,7 @@ _EXPECTED_COLS: dict[str, list[tuple[str, str]]] = {
         ("separation_l4",          "FLOAT"),
         ("yac_above_expected_l4",  "FLOAT"),
         ("cpoe_l4",                "FLOAT"),
+        ("aggressiveness_l4",      "FLOAT"),
     ],
 }
 

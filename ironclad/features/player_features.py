@@ -187,6 +187,11 @@ class PlayerFeatureBuilder:
             if not ngs_pass.empty and "completion_percentage_above_expectation" in ngs_pass.columns and ngs_pass["completion_percentage_above_expectation"].notna().any()
             else None
         )
+        aggressiveness_l4 = (
+            float(ngs_pass["aggressiveness"].dropna().mean())
+            if not ngs_pass.empty and "aggressiveness" in ngs_pass.columns and ngs_pass["aggressiveness"].notna().any()
+            else None
+        )
 
         def opp_feat(col, default=None):
             if opp_feats.empty or col not in opp_feats.columns:
@@ -232,6 +237,7 @@ class PlayerFeatureBuilder:
             "separation_l4":            separation_l4,
             "yac_above_expected_l4":    yac_above_expected_l4,
             "cpoe_l4":                  cpoe_l4,
+            "aggressiveness_l4":        aggressiveness_l4,
             "opp_def_pass_epa_l4":      opp_feat("def_epa_per_play_l4"),
             "opp_def_rush_epa_l4":      opp_feat("def_rush_epa_l4"),
             "opp_def_sack_rate_l4":     opp_feat("def_sack_rate_l4"),
