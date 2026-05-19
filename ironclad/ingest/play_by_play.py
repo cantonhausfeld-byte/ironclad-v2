@@ -53,6 +53,8 @@ class PBPIngestor(BaseIngestor):
 
 
 def _clean(raw: pd.DataFrame) -> pd.DataFrame:
+    if "season_type" in raw.columns:
+        raw = raw[raw["season_type"] == "REG"]
     cols = [c for c in _KEEP if c in raw.columns]
     df = raw[cols].copy()
     df["play_id"] = df["play_id"].astype(str)

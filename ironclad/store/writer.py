@@ -77,17 +77,17 @@ class BronzeWriter(_BaseWriter):
     def write_odds(self, df: pd.DataFrame) -> int:
         df = df.copy()
         df["_ingest_ts"] = _now()
-        return self._append(df, "bronze.odds")
+        return self._upsert(df, "bronze.odds", ["game_id", "source"])
 
     def write_player_props(self, df: pd.DataFrame) -> int:
         df = df.copy()
         df["_ingest_ts"] = _now()
-        return self._append(df, "bronze.player_props")
+        return self._upsert(df, "bronze.player_props", ["game_id", "player_name", "stat_type", "bookmaker"])
 
     def write_weather(self, df: pd.DataFrame) -> int:
         df = df.copy()
         df["_ingest_ts"] = _now()
-        return self._append(df, "bronze.weather")
+        return self._upsert(df, "bronze.weather", ["game_id", "source"])
 
     def write_stadiums(self, df: pd.DataFrame) -> int:
         df = df.copy()
@@ -121,12 +121,12 @@ class BronzeWriter(_BaseWriter):
     def write_ftn_charting(self, df: pd.DataFrame) -> int:
         df = df.copy()
         df["_ingest_ts"] = _now()
-        return self._append(df, "bronze.ftn_charting")
+        return self._upsert(df, "bronze.ftn_charting", ["game_id", "season", "week"])
 
     def write_pfr_pressure_weekly(self, df: pd.DataFrame) -> int:
         df = df.copy()
         df["_ingest_ts"] = _now()
-        return self._append(df, "bronze.pfr_pressure_weekly")
+        return self._upsert(df, "bronze.pfr_pressure_weekly", ["season", "week", "game_id", "team"])
 
     def write_player_id_mapping(self, df: pd.DataFrame) -> int:
         df = df.copy()

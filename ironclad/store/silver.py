@@ -150,6 +150,7 @@ class SilverTransformer:
             FROM bronze.play_by_play
             WHERE posteam IS NOT NULL
               AND play_type IN ('pass','run','qb_kneel','qb_spike')
+              AND (season_type = 'REG' OR season_type IS NULL)
             {and_where}
             GROUP BY game_id, season, week, posteam, defteam
         """).df()
@@ -388,7 +389,11 @@ class SilverTransformer:
     # ── FTN charting enrichment ───────────────────────────────────────────────
 
     def _enrich_with_ftn(self, season: int) -> None:
-        """UPDATE silver.team_game_stats with FTN game-level aggregates for one season."""
+        """UPDATE silver.team_game_stats with FTN game-level aggregates for one season.
+
+        FTN data has no team column, so we aggregate at game level and apply the
+        same values to both home and away rows for each game.
+        """
         self._conn.execute("""
             UPDATE silver.team_game_stats AS s
             SET play_action_rate = f.play_action_rate,
@@ -398,17 +403,15 @@ class SilverTransformer:
             FROM (
                 SELECT
                     game_id,
-                    team,
                     AVG(CAST(is_play_action AS INTEGER)) AS play_action_rate,
                     AVG(CAST(is_motion AS INTEGER))      AS motion_rate,
-                    AVG(n_blitzers)                     AS avg_blitzers_ftn,
-                    AVG(n_defense_box)                  AS avg_box_count
+                    AVG(n_blitzers)                      AS avg_blitzers_ftn,
+                    AVG(n_defense_box)                   AS avg_box_count
                 FROM bronze.ftn_charting
                 WHERE season = ?
-                GROUP BY game_id, team
+                GROUP BY game_id
             ) f
             WHERE s.game_id = f.game_id
-              AND s.team = f.team
               AND s.season = ?
         """, [season, season])
         logger.debug("FTN charting enrichment done for season %d", season)

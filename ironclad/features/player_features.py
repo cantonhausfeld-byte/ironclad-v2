@@ -74,7 +74,7 @@ class PlayerFeatureBuilder:
                     )
                     rows.append(row)
                 except Exception as exc:
-                    logger.debug("Player %s failed: %s", player.get("player_id"), exc)
+                    logger.warning("Player %s feature build failed: %s", player.get("player_id"), exc)
 
         if not rows:
             return pd.DataFrame()

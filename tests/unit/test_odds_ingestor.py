@@ -128,9 +128,15 @@ def test_load_prop_lines_skips_null_player_id(conn):
 
 
 def test_load_prop_lines_deduplicates(conn):
-    # Same player+stat twice — should return only one PropLine
+    # Same player+stat from two bookmakers — should return only one PropLine (first seen)
     _insert_prop(conn, "2024_14_LAC_KC", "P1", "rec_yards", 55.5, -110, -110)
-    _insert_prop(conn, "2024_14_LAC_KC", "P1", "rec_yards", 60.0, -115, -105)
+    conn.execute("""
+        INSERT INTO bronze.player_props
+        (game_id, player_name, player_id, team, stat_type, line, over_odds, under_odds,
+         bookmaker, retrieved_at)
+        VALUES ('2024_14_LAC_KC', 'Test Player', 'P1', 'KC', 'rec_yards',
+                60.0, -115, -105, 'fanduel', NOW())
+    """)
     lines = load_prop_lines_from_db(conn, "2024_14_LAC_KC")
     assert len(lines) == 1
 

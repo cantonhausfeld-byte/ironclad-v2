@@ -99,7 +99,7 @@ class PlayerDraw:
                         rng,
                         mean=adj_yds_per_tgt,
                         std=ctx.yards_per_target_std,
-                        low=-5.0, high=80.0,
+                        low=0.0, high=80.0,
                     )[0])
                     rec_yards += yds
             result.targets = targets
@@ -116,7 +116,7 @@ class PlayerDraw:
                     rng,
                     mean=ctx.yards_per_carry or 4.2,
                     std=ctx.yards_per_carry_std,
-                    low=-10.0, high=80.0,
+                    low=0.0, high=80.0,
                 )[0])
                 rush_yards += yds
             result.carries = carries

@@ -157,7 +157,17 @@ class PropAnalyzer:
 
         if not rows:
             return pd.DataFrame()
-        return pd.DataFrame(rows).sort_values("ev", ascending=False).reset_index(drop=True)
+        df_out = pd.DataFrame(rows)
+        skipped = df_out[df_out["side"] == "skip"]
+        for _, row in skipped.iterrows():
+            logger.warning(
+                "Skipping prop for %s %s: %s",
+                row["player_id"], row["stat_type"], row.get("reason", "unknown"),
+            )
+        df_out = df_out[df_out["side"] != "skip"].reset_index(drop=True)
+        if df_out.empty:
+            return pd.DataFrame()
+        return df_out.sort_values("ev", ascending=False).reset_index(drop=True)
 
     # ── Internals ─────────────────────────────────────────────────────────────
 

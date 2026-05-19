@@ -20,7 +20,7 @@ class BackfillWorkflow:
         seasons: list[int],
         include_pbp: bool = True,
         build_features: bool = True,
-    ) -> None:
+    ) -> dict:
         logger.info("Starting backfill for seasons: %s", seasons)
         conn = get_connection()
         create_all_tables(conn)
@@ -33,6 +33,9 @@ class BackfillWorkflow:
         silver = SilverTransformer(conn)
         silver_counts = silver.run(seasons)
         logger.info("Silver counts: %s", silver_counts)
+
+        features_built = 0
+        features_failed = 0
 
         if build_features and include_pbp:
             logger.info("Building gold team features...")
@@ -55,8 +58,16 @@ class BackfillWorkflow:
                 try:
                     cutoff = _parse_kickoff(g["gameday"], g.get("gametime_local")) - timedelta(minutes=KNOWLEDGE_CUTOFF_MARGIN_MINUTES)
                     player_builder.build_for_game(g["game_id"], cutoff)
+                    features_built += 1
                 except Exception as exc:
-                    logger.debug("Player features failed for %s: %s", g["game_id"], exc)
+                    features_failed += 1
+                    logger.warning("Player features failed for %s: %s", g["game_id"], exc)
+
+            if features_failed > 0:
+                logger.warning(
+                    "Player feature build: %d succeeded, %d failed",
+                    features_built, features_failed,
+                )
 
             logger.info("Backfilling gold target columns...")
             backfiller = TargetBackfiller(conn)
@@ -64,3 +75,9 @@ class BackfillWorkflow:
             logger.info("Target backfill counts: %s", target_counts)
 
         logger.info("Backfill complete for seasons %s", seasons)
+        return {
+            "ingest": counts,
+            "silver": silver_counts,
+            "features_built": features_built,
+            "features_failed": features_failed,
+        }

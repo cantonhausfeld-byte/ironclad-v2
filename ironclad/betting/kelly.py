@@ -13,12 +13,13 @@ def kelly_fraction(model_prob: float, american_odds: int) -> float:
         q = 1 - p
     Returns 0 when the bet has no edge (or negative edge).
     """
+    model_prob = float(max(0.0, min(1.0, model_prob)))
     b = american_to_decimal(american_odds) - 1.0
     if b <= 0.0:
         return 0.0
     q = 1.0 - model_prob
     f = (b * model_prob - q) / b
-    return max(0.0, f)
+    return float(max(0.0, min(1.0, f)))
 
 
 def fractional_kelly(model_prob: float, american_odds: int, fraction: float = 0.25) -> float:

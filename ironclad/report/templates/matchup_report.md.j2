@@ -42,7 +42,7 @@
 {% if home_qb %}
 | Player | Pass Att | Comp | Pass Yds | Carries | Rush Yds | TDs |
 |---|---|---|---|---|---|---|
-{% for p in home_qb %}| {{ p.player_name }} | {{ p.pass_attempts }} ({{ p.pass_attempts_range }}) | {{ p.completions }} ({{ p.completions_range }}) | {{ p.pass_yards }} ({{ p.pass_yards_range }}) | {% if p.carries != '—' and p.carries > 0 %}{{ p.carries }} ({{ p.carries_range }}){% else %}—{% endif %} | {% if p.rush_yards != '—' and p.rush_yards > 0 %}{{ p.rush_yards }} ({{ p.rush_yards_range }}){% else %}—{% endif %} | {{ p.tds }} ({{ p.tds_range }}) |
+{% for p in home_qb %}| {{ p.player_name }} | {{ p.pass_attempts | default("—", true) }} ({{ p.pass_attempts_range }}) | {{ p.completions | default("—", true) }} ({{ p.completions_range }}) | {{ p.pass_yards | default("—", true) }} ({{ p.pass_yards_range }}) | {% if p.carries is not none and p.carries > 0 %}{{ p.carries }} ({{ p.carries_range }}){% else %}—{% endif %} | {% if p.rush_yards is not none and p.rush_yards > 0 %}{{ p.rush_yards }} ({{ p.rush_yards_range }}){% else %}—{% endif %} | {{ p.tds | default("—", true) }} ({{ p.tds_range }}) |
 {% endfor %}
 {% else %}
 *No QB projections available*
@@ -52,7 +52,7 @@
 {% if home_rb %}
 | Player | Pos | Carries | Rush Yds | Targets | Rec | Rec Yds | TDs |
 |---|---|---|---|---|---|---|---|
-{% for p in home_rb %}| {{ p.player_name }} | {{ p.position }} | {{ p.carries }} ({{ p.carries_range }}) | {{ p.rush_yards }} ({{ p.rush_yards_range }}) | {{ p.targets }} ({{ p.targets_range }}) | {{ p.receptions }} ({{ p.receptions_range }}) | {{ p.rec_yards }} ({{ p.rec_yards_range }}) | {{ p.tds }} ({{ p.tds_range }}) |
+{% for p in home_rb %}| {{ p.player_name }} | {{ p.position }} | {{ p.carries | default("—", true) }} ({{ p.carries_range }}) | {{ p.rush_yards | default("—", true) }} ({{ p.rush_yards_range }}) | {{ p.targets | default("—", true) }} ({{ p.targets_range }}) | {{ p.receptions | default("—", true) }} ({{ p.receptions_range }}) | {{ p.rec_yards | default("—", true) }} ({{ p.rec_yards_range }}) | {{ p.tds | default("—", true) }} ({{ p.tds_range }}) |
 {% endfor %}
 {% else %}
 *No RB projections available*
@@ -62,7 +62,7 @@
 {% if home_wr_te %}
 | Player | Pos | Targets | Rec | Rec Yds | TDs |
 |---|---|---|---|---|---|
-{% for p in home_wr_te %}| {{ p.player_name }} | {{ p.position }} | {{ p.targets }} ({{ p.targets_range }}) | {{ p.receptions }} ({{ p.receptions_range }}) | {{ p.rec_yards }} ({{ p.rec_yards_range }}) | {{ p.tds }} ({{ p.tds_range }}) |
+{% for p in home_wr_te %}| {{ p.player_name }} | {{ p.position }} | {{ p.targets | default("—", true) }} ({{ p.targets_range }}) | {{ p.receptions | default("—", true) }} ({{ p.receptions_range }}) | {{ p.rec_yards | default("—", true) }} ({{ p.rec_yards_range }}) | {{ p.tds | default("—", true) }} ({{ p.tds_range }}) |
 {% endfor %}
 {% else %}
 *No WR/TE projections available*
@@ -76,7 +76,7 @@
 {% if away_qb %}
 | Player | Pass Att | Comp | Pass Yds | Carries | Rush Yds | TDs |
 |---|---|---|---|---|---|---|
-{% for p in away_qb %}| {{ p.player_name }} | {{ p.pass_attempts }} ({{ p.pass_attempts_range }}) | {{ p.completions }} ({{ p.completions_range }}) | {{ p.pass_yards }} ({{ p.pass_yards_range }}) | {% if p.carries != '—' and p.carries > 0 %}{{ p.carries }} ({{ p.carries_range }}){% else %}—{% endif %} | {% if p.rush_yards != '—' and p.rush_yards > 0 %}{{ p.rush_yards }} ({{ p.rush_yards_range }}){% else %}—{% endif %} | {{ p.tds }} ({{ p.tds_range }}) |
+{% for p in away_qb %}| {{ p.player_name }} | {{ p.pass_attempts | default("—", true) }} ({{ p.pass_attempts_range }}) | {{ p.completions | default("—", true) }} ({{ p.completions_range }}) | {{ p.pass_yards | default("—", true) }} ({{ p.pass_yards_range }}) | {% if p.carries is not none and p.carries > 0 %}{{ p.carries }} ({{ p.carries_range }}){% else %}—{% endif %} | {% if p.rush_yards is not none and p.rush_yards > 0 %}{{ p.rush_yards }} ({{ p.rush_yards_range }}){% else %}—{% endif %} | {{ p.tds | default("—", true) }} ({{ p.tds_range }}) |
 {% endfor %}
 {% else %}
 *No QB projections available*
@@ -86,7 +86,7 @@
 {% if away_rb %}
 | Player | Pos | Carries | Rush Yds | Targets | Rec | Rec Yds | TDs |
 |---|---|---|---|---|---|---|---|
-{% for p in away_rb %}| {{ p.player_name }} | {{ p.position }} | {{ p.carries }} ({{ p.carries_range }}) | {{ p.rush_yards }} ({{ p.rush_yards_range }}) | {{ p.targets }} ({{ p.targets_range }}) | {{ p.receptions }} ({{ p.receptions_range }}) | {{ p.rec_yards }} ({{ p.rec_yards_range }}) | {{ p.tds }} ({{ p.tds_range }}) |
+{% for p in away_rb %}| {{ p.player_name }} | {{ p.position }} | {{ p.carries | default("—", true) }} ({{ p.carries_range }}) | {{ p.rush_yards | default("—", true) }} ({{ p.rush_yards_range }}) | {{ p.targets | default("—", true) }} ({{ p.targets_range }}) | {{ p.receptions | default("—", true) }} ({{ p.receptions_range }}) | {{ p.rec_yards | default("—", true) }} ({{ p.rec_yards_range }}) | {{ p.tds | default("—", true) }} ({{ p.tds_range }}) |
 {% endfor %}
 {% else %}
 *No RB projections available*
@@ -96,7 +96,7 @@
 {% if away_wr_te %}
 | Player | Pos | Targets | Rec | Rec Yds | TDs |
 |---|---|---|---|---|---|
-{% for p in away_wr_te %}| {{ p.player_name }} | {{ p.position }} | {{ p.targets }} ({{ p.targets_range }}) | {{ p.receptions }} ({{ p.receptions_range }}) | {{ p.rec_yards }} ({{ p.rec_yards_range }}) | {{ p.tds }} ({{ p.tds_range }}) |
+{% for p in away_wr_te %}| {{ p.player_name }} | {{ p.position }} | {{ p.targets | default("—", true) }} ({{ p.targets_range }}) | {{ p.receptions | default("—", true) }} ({{ p.receptions_range }}) | {{ p.rec_yards | default("—", true) }} ({{ p.rec_yards_range }}) | {{ p.tds | default("—", true) }} ({{ p.tds_range }}) |
 {% endfor %}
 {% else %}
 *No WR/TE projections available*

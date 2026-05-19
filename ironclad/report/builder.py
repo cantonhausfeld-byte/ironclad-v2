@@ -81,7 +81,7 @@ def build_report_context(
             for m in metrics:
                 mdf = pdf[pdf["metric"] == m]
                 if mdf.empty:
-                    row[m] = "—"
+                    row[m] = None
                     row[f"{m}_range"] = "—"
                 else:
                     row[m] = round(mdf.iloc[0]["mean"], 1)

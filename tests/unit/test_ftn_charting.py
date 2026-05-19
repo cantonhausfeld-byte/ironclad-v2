@@ -16,7 +16,6 @@ def _make_raw_ftn(**kwargs):
         "game_id":        ["2024_05_KC_BAL"] * 4,
         "season":         [2024] * 4,
         "week":           [5] * 4,
-        "team":           ["KC", "KC", "BAL", "BAL"],
         "n_blitzers":     [4, 5, 3, 6],
         "n_pass_rushers": [4, 4, 4, 5],
         "n_defense_box":  [6, 7, 6, 6],
@@ -42,11 +41,11 @@ def test_ftn_table_created():
 # ── Test 2: clean function filters REG rows ───────────────────────────────────
 
 def test_clean_ftn_filters_reg():
+    """FTN data has no season_type column; all 4 play-level rows should be kept."""
     raw = _make_raw_ftn()
-    raw["season_type"] = ["REG", "REG", "POST", "REG"]
     df = _clean_ftn_charting(raw)
-    # POST row should be dropped
-    assert len(df) == 3, f"Expected 3 rows (POST filtered), got {len(df)}"
+    assert len(df) == 4, f"Expected 4 rows, got {len(df)}"
+    assert "team" not in df.columns, "team column should not be in cleaned FTN data"
 
 
 # ── Test 3: silver enrichment updates play_action_rate ────────────────────────
@@ -74,14 +73,14 @@ def test_ftn_silver_enrich():
     _insert_silver_game(conn)
     _insert_silver_team_stats(conn, "2024_05_KC_BAL", "KC")
 
-    # Insert FTN rows for KC — 2 plays, 1 play-action = 50% rate
+    # Insert FTN rows — 2 plays, 1 play-action = 50% rate (no team column)
     conn.execute("""
         INSERT INTO bronze.ftn_charting
-            (game_id, season, week, team, n_blitzers, n_defense_box,
+            (game_id, season, week, n_blitzers, n_defense_box,
              is_play_action, is_motion)
         VALUES
-            ('2024_05_KC_BAL', 2024, 5, 'KC', 4, 6, 1, 0),
-            ('2024_05_KC_BAL', 2024, 5, 'KC', 5, 7, 0, 1)
+            ('2024_05_KC_BAL', 2024, 5, 4, 6, 1, 0),
+            ('2024_05_KC_BAL', 2024, 5, 5, 7, 0, 1)
     """)
 
     transformer = SilverTransformer(conn)

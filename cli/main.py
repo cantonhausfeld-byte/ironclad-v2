@@ -27,7 +27,7 @@ def cli() -> None:
 @cli.command()
 @click.option("--seasons", "-s", multiple=True, type=int,
               help="Seasons to backfill (can repeat: -s 2022 -s 2023)")
-@click.option("--season", type=int, default=None,
+@click.option("--season", type=int, default=None, callback=_validate_season, is_eager=False,
               help="Single season shorthand")
 @click.option("--no-pbp", is_flag=True, default=False,
               help="Skip play-by-play (faster, no stats)")
@@ -49,8 +49,8 @@ def backfill(seasons, season, no_pbp) -> None:
 # ── weekly ────────────────────────────────────────────────────────────────────
 
 @cli.command()
-@click.option("--season", required=True, type=int)
-@click.option("--week", required=True, type=int)
+@click.option("--season", required=True, type=int, callback=_validate_season, is_eager=False)
+@click.option("--week", required=True, type=int, callback=_validate_week, is_eager=False)
 def weekly(season, week) -> None:
     """Run weekly refresh: ingest → silver → gold features → target backfill."""
     click.echo(f"Running weekly refresh: season={season} week={week}")
@@ -69,8 +69,8 @@ def weekly(season, week) -> None:
 @click.option("--game-id", default=None, help="Canonical game ID (e.g. 2023_18_KC_LAC)")
 @click.option("--home", default=None, help="Home team abbreviation")
 @click.option("--away", default=None, help="Away team abbreviation")
-@click.option("--week", default=None, type=int, help="Week number")
-@click.option("--season", default=None, type=int, help="Season year")
+@click.option("--week", default=None, type=int, callback=_validate_week, is_eager=False, help="Week number")
+@click.option("--season", default=None, type=int, callback=_validate_season, is_eager=False, help="Season year")
 @click.option("--format", "fmt", default="markdown",
               type=click.Choice(["markdown", "both"]),
               help="Output format")
@@ -107,6 +107,18 @@ def report(game_id, home, away, week, season, fmt, output_dir, n_draws, backfill
     except ValueError as e:
         click.echo(f"ERROR: {e}", err=True)
         sys.exit(1)
+
+
+def _validate_season(ctx, param, value):
+    if value is not None and not (1999 <= value <= 2030):
+        raise click.BadParameter(f"Season must be between 1999 and 2030, got {value}")
+    return value
+
+
+def _validate_week(ctx, param, value):
+    if value is not None and not (1 <= value <= 23):
+        raise click.BadParameter(f"Week must be between 1 and 23, got {value}")
+    return value
 
 
 def _lookup_game_id(home: str, away: str, week: int, season: int) -> str | None:

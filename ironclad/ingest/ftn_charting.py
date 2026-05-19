@@ -1,7 +1,7 @@
 """Ingest FTN play-level charting data (blitz count, play-action, motion, box count).
 
 Available 2022+ only. Gold features will be NULL before 2022 if not backfilled.
-FTN data is play-level; we aggregate per team per game during silver enrichment.
+FTN data is play-level; aggregated per game during silver enrichment (no team column in source).
 """
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from ironclad.store.writer import BronzeWriter
 logger = logging.getLogger(__name__)
 
 _KEEP = [
-    "game_id", "season", "week", "team",
+    "game_id", "season", "week",
     "n_blitzers", "n_pass_rushers", "n_defense_box",
     "is_play_action", "is_motion",
 ]
@@ -55,18 +55,8 @@ def _clean_ftn_charting(raw: pd.DataFrame) -> pd.DataFrame:
         if src in raw.columns and dst not in raw.columns:
             raw = raw.rename(columns={src: dst})
 
-    # Filter to regular season rows when season_type is present
-    if "season_type" in raw.columns:
-        raw = raw[raw["season_type"].isin(["REG", "reg", None]) |
-                  raw["season_type"].isna()]
-
     df = _safe_select(raw, _KEEP)
     df = df.dropna(subset=["game_id", "season"])
-
-    # Derive team from game_id if not present (FTN may not have explicit team col)
-    # We keep a team col as NULL if not available; silver enrichment joins by game_id
-    if "team" not in df.columns:
-        df["team"] = None
 
     df["season"] = pd.to_numeric(df["season"], errors="coerce").fillna(0).astype(int)
     df["week"] = pd.to_numeric(df["week"], errors="coerce").fillna(0).astype(int)

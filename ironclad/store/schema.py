@@ -156,7 +156,8 @@ def _bronze(conn: duckdb.DuckDBPyConnection) -> None:
         total_juice_under FLOAT,
         moneyline_home    INTEGER,
         moneyline_away    INTEGER,
-        _ingest_ts        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        _ingest_ts        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (game_id, source)
     )
     """)
 
@@ -171,7 +172,8 @@ def _bronze(conn: duckdb.DuckDBPyConnection) -> None:
         precip_in    FLOAT,
         humidity_pct FLOAT,
         conditions   VARCHAR,
-        _ingest_ts   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        _ingest_ts   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (game_id, source)
     )
     """)
 
@@ -236,7 +238,8 @@ def _bronze(conn: duckdb.DuckDBPyConnection) -> None:
         under_odds      INTEGER,
         bookmaker       VARCHAR NOT NULL,
         retrieved_at    TIMESTAMPTZ NOT NULL,
-        _ingest_ts      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        _ingest_ts      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (game_id, player_name, stat_type, bookmaker)
     )
     """)
 
@@ -303,7 +306,6 @@ def _bronze(conn: duckdb.DuckDBPyConnection) -> None:
         game_id          VARCHAR NOT NULL,
         season           INTEGER NOT NULL,
         week             INTEGER NOT NULL,
-        team             VARCHAR,
         n_blitzers        FLOAT,
         n_pass_rushers    FLOAT,
         n_defense_box     FLOAT,
@@ -317,7 +319,7 @@ def _bronze(conn: duckdb.DuckDBPyConnection) -> None:
     CREATE TABLE IF NOT EXISTS bronze.pfr_pressure_weekly (
         season              INTEGER NOT NULL,
         week                INTEGER NOT NULL,
-        game_id             VARCHAR,
+        game_id             VARCHAR NOT NULL,
         team                VARCHAR NOT NULL,
         times_pressured     INTEGER DEFAULT 0,
         times_pressured_pct FLOAT,
@@ -325,7 +327,8 @@ def _bronze(conn: duckdb.DuckDBPyConnection) -> None:
         times_hurried       INTEGER DEFAULT 0,
         times_hit           INTEGER DEFAULT 0,
         times_sacked        INTEGER DEFAULT 0,
-        _ingest_ts          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        _ingest_ts          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (season, week, game_id, team)
     )
     """)
 

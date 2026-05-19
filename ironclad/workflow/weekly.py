@@ -54,6 +54,7 @@ class WeeklyWorkflow:
         team_builder = TeamFeatureBuilder(conn)
         player_builder = PlayerFeatureBuilder(conn)
         feature_count = 0
+        feature_failures = 0
 
         for _, g in games.iterrows():
             try:
@@ -65,9 +66,17 @@ class WeeklyWorkflow:
                 player_builder.build_for_game(g["game_id"], cutoff)
                 feature_count += 1
             except Exception as exc:
+                feature_failures += 1
                 logger.warning("Feature build failed for %s: %s", g["game_id"], exc)
 
-        logger.info("Built features for %d games in week %d", feature_count, week)
+        if feature_count == 0 and not games.empty:
+            logger.warning(
+                "All %d feature builds failed for season=%d week=%d — "
+                "check logs above for details",
+                len(games), season, week,
+            )
+        else:
+            logger.info("Built features for %d/%d games in week %d", feature_count, len(games), week)
 
         # ── 4. Target backfill for completed games ────────────────────────────
         logger.info("Backfilling targets for completed games in season %d...", season)
@@ -88,5 +97,6 @@ class WeeklyWorkflow:
             "ingest": counts,
             "silver": silver_counts,
             "features_built": feature_count,
+            "features_failed": feature_failures,
             "targets": target_counts,
         }

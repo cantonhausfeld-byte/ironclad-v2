@@ -124,6 +124,12 @@ class MatchupWorkflow:
 
         if home_feats.empty or away_feats.empty:
             raise RuntimeError(f"Team features missing for {game_id}")
+        if len(home_player_feats) < 2 or len(away_player_feats) < 2:
+            raise RuntimeError(
+                f"Insufficient player features for {game_id}: "
+                f"{len(home_player_feats)} home, {len(away_player_feats)} away players. "
+                "Run `ironclad backfill` to populate player data."
+            )
 
         engine = MonteCarloEngine(n_draws=self.n_draws, seed=self.seed, use_drive_sim=self.use_drive_sim)
         result = engine.run(

@@ -43,7 +43,7 @@ def test_simulate_missing_game():
     """Game not in DB → 404."""
     with patch("ironclad.api.app.MatchupWorkflow") as MockWF:
         MockWF.return_value.simulate.side_effect = ValueError("Game not found")
-        resp = client.post("/api/v1/simulate", json={"game_id": "2024_14_LAC_KC", "n_draws": 50})
+        resp = client.post("/api/v1/simulate", json={"game_id": "2024_14_LAC_KC", "n_draws": 100})
     assert resp.status_code == 404
     assert "not found" in resp.json()["detail"].lower()
 
@@ -56,12 +56,12 @@ def test_simulate_success():
                         home_pass_yards=250, away_pass_yards=200,
                         home_rush_yards=80, away_rush_yards=60,
                         home_pass_att=32, away_pass_att=28)
-             for _ in range(50)]
+             for _ in range(100)]
     mock_result = SimulationResult("KC", "LAC", draws)
 
     with patch("ironclad.api.app.MatchupWorkflow") as MockWF:
         MockWF.return_value.simulate.return_value = (mock_result, {}, None, MagicMock())
-        resp = client.post("/api/v1/simulate", json={"game_id": "2024_14_LAC_KC", "n_draws": 50})
+        resp = client.post("/api/v1/simulate", json={"game_id": "2024_14_LAC_KC", "n_draws": 100})
 
     assert resp.status_code == 200
     body = resp.json()
@@ -77,7 +77,7 @@ def test_edges_no_props(conn):
     """No props in DB → 404 with helpful message."""
     with patch("ironclad.api.app.get_connection", return_value=conn), \
          patch("ironclad.api.app.load_prop_lines_from_db", return_value=[]):
-        resp = client.post("/api/v1/edges", json={"game_id": "2024_14_LAC_KC", "n_draws": 50})
+        resp = client.post("/api/v1/edges", json={"game_id": "2024_14_LAC_KC", "n_draws": 100})
     assert resp.status_code == 404
     assert "ironclad odds" in resp.json()["detail"]
 

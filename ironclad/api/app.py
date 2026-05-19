@@ -6,7 +6,8 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
-from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, field_validator
 
 from ironclad.betting.props import PropAnalyzer, load_prop_lines_from_db
 from ironclad.eval.performance_tracker import load_results, pnl_summary
@@ -31,6 +32,13 @@ class GameInfo(BaseModel):
 class SimulateRequest(BaseModel):
     game_id: str
     n_draws: int = 500
+
+    @field_validator("n_draws")
+    @classmethod
+    def n_draws_valid(cls, v: int) -> int:
+        if not (100 <= v <= 50_000):
+            raise ValueError("n_draws must be between 100 and 50,000")
+        return v
 
 
 class SimulationResponse(BaseModel):
@@ -66,6 +74,27 @@ class EdgesRequest(BaseModel):
     min_ev: float = 0.0
     n_draws: int = 500
 
+    @field_validator("n_draws")
+    @classmethod
+    def n_draws_valid(cls, v: int) -> int:
+        if not (100 <= v <= 50_000):
+            raise ValueError("n_draws must be between 100 and 50,000")
+        return v
+
+    @field_validator("kelly_fraction")
+    @classmethod
+    def kelly_valid(cls, v: float) -> float:
+        if not (0.0 < v <= 1.0):
+            raise ValueError("kelly_fraction must be in (0, 1]")
+        return v
+
+    @field_validator("min_ev")
+    @classmethod
+    def min_ev_valid(cls, v: float) -> float:
+        if v < 0.0:
+            raise ValueError("min_ev must be >= 0.0")
+        return v
+
 
 class EdgesResponse(BaseModel):
     game_id: str
@@ -77,8 +106,6 @@ class ResultsResponse(BaseModel):
     summary: dict[str, Any]
     bets: list[dict[str, Any]]
 
-
-# ── Lifespan: pre-warm models on startup ─────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -95,6 +122,13 @@ app = FastAPI(
     description="NFL matchup simulation and betting edge REST API",
     version="1.0.0",
     lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
 )
 
 
