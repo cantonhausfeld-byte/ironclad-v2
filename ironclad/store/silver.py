@@ -150,6 +150,10 @@ class SilverTransformer:
             FROM bronze.play_by_play
             WHERE posteam IS NOT NULL
               AND play_type IN ('pass','run','qb_kneel','qb_spike')
+              AND game_id IN (
+                  SELECT game_id FROM silver.games
+                  WHERE season_type = 'REG' OR season_type IS NULL
+              )
             {and_where}
             GROUP BY game_id, season, week, posteam, defteam
         """).df()
