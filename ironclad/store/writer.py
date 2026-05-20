@@ -134,7 +134,7 @@ class BronzeWriter(_BaseWriter):
     def write_ngs_rushing(self, df: pd.DataFrame) -> int:
         df = df.copy()
         df["_ingest_ts"] = _now()
-        return self._upsert(df, "bronze.ngs_rushing", ["season", "week", "player_id"])
+        return self._replace(df, "bronze.ngs_rushing", ["season", "week", "player_id"])
 
     def write_ftn_charting(self, df: pd.DataFrame) -> int:
         df = df.copy()

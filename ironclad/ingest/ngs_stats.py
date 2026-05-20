@@ -46,6 +46,8 @@ _RUSHING_RENAMES = {
     "player_display_name": "player_name",
     "player_position": "position",
     "team_abbr": "team",
+    # nflreadpy renamed this column at some point
+    "rush_yards_over_expected_per_att": "avg_rush_yards_over_expected",
 }
 
 
