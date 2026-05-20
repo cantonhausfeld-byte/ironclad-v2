@@ -113,7 +113,8 @@ class PlayerEfficiencyModel(BaseModel):
 
     def predict(self, X: pd.DataFrame) -> dict:
         pos = str(X["position"].iloc[0]) if "position" in X.columns else "WR"
-        if pos == "QB" and self._qb_regs:
+        qb_regs = getattr(self, "_qb_regs", None)
+        if pos == "QB" and qb_regs:
             return self._predict_qb(X)
         if self._fitted and pos in self._regs and self._regs[pos]:
             return self._predict_trained(X, pos)
@@ -151,11 +152,12 @@ class PlayerEfficiencyModel(BaseModel):
 
     def _predict_qb(self, X: pd.DataFrame) -> dict:
         priors = _EFFICIENCY_PRIORS["QB"]
+        qb_regs = getattr(self, "_qb_regs", None) or {}
 
         def pred(key, lo, hi, default):
-            if key not in self._qb_regs:
+            if key not in qb_regs:
                 return default
-            reg = self._qb_regs[key]
+            reg = qb_regs[key]
             train_cols = list(reg.feature_names_in_)
             Xm = _to_xgb(X.reindex(columns=train_cols, fill_value=0.0))
             val = float(reg.predict(Xm)[0])
