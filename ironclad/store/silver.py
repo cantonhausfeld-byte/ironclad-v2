@@ -150,7 +150,6 @@ class SilverTransformer:
             FROM bronze.play_by_play
             WHERE posteam IS NOT NULL
               AND play_type IN ('pass','run','qb_kneel','qb_spike')
-              AND (season_type = 'REG' OR season_type IS NULL)
             {and_where}
             GROUP BY game_id, season, week, posteam, defteam
         """).df()
@@ -403,8 +402,8 @@ class SilverTransformer:
             FROM (
                 SELECT
                     game_id,
-                    AVG(CAST(is_play_action AS INTEGER)) AS play_action_rate,
-                    AVG(CAST(is_motion AS INTEGER))      AS motion_rate,
+                    AVG(is_play_action) AS play_action_rate,
+                    AVG(is_motion)      AS motion_rate,
                     AVG(n_blitzers)                      AS avg_blitzers_ftn,
                     AVG(n_defense_box)                   AS avg_box_count
                 FROM bronze.ftn_charting

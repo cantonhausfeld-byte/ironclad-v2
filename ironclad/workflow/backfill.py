@@ -37,7 +37,7 @@ class BackfillWorkflow:
         features_built = 0
         features_failed = 0
 
-        if build_features and include_pbp:
+        if build_features:
             logger.info("Building gold team features...")
             team_builder = TeamFeatureBuilder(conn)
             for season in seasons:

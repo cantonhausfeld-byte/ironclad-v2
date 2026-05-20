@@ -41,11 +41,14 @@ def test_ftn_table_created():
 # ── Test 2: clean function filters REG rows ───────────────────────────────────
 
 def test_clean_ftn_filters_reg():
-    """FTN data has no season_type column; all 4 play-level rows should be kept."""
+    """_clean_ftn_charting aggregates to one row per game."""
     raw = _make_raw_ftn()
     df = _clean_ftn_charting(raw)
-    assert len(df) == 4, f"Expected 4 rows, got {len(df)}"
+    # 4 play-level rows, all same game → 1 aggregated row
+    assert len(df) == 1, f"Expected 1 aggregated row, got {len(df)}"
     assert "team" not in df.columns, "team column should not be in cleaned FTN data"
+    # Play action rate: 2 of 4 plays = 0.5
+    assert abs(df["is_play_action"].iloc[0] - 0.5) < 0.01
 
 
 # ── Test 3: silver enrichment updates play_action_rate ────────────────────────

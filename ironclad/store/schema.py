@@ -309,8 +309,8 @@ def _bronze(conn: duckdb.DuckDBPyConnection) -> None:
         n_blitzers        FLOAT,
         n_pass_rushers    FLOAT,
         n_defense_box     FLOAT,
-        is_play_action    INTEGER DEFAULT 0,
-        is_motion         INTEGER DEFAULT 0,
+        is_play_action    FLOAT,
+        is_motion         FLOAT,
         _ingest_ts        TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
     """)
@@ -840,3 +840,10 @@ def _migrate(conn: duckdb.DuckDBPyConnection) -> None:
     for table, cols in _EXPECTED_COLS.items():
         for col, typ in cols:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {typ}")
+
+    # One-time type upgrades: ftn_charting booleans stored as rates (FLOAT, not INTEGER)
+    try:
+        conn.execute("ALTER TABLE bronze.ftn_charting ALTER COLUMN is_play_action TYPE FLOAT")
+        conn.execute("ALTER TABLE bronze.ftn_charting ALTER COLUMN is_motion TYPE FLOAT")
+    except Exception:
+        pass  # Already FLOAT or table doesn't exist yet

@@ -65,9 +65,15 @@ def _clean_ftn_charting(raw: pd.DataFrame) -> pd.DataFrame:
     int_cols = ["n_blitzers", "n_pass_rushers", "n_defense_box"]
     for c in bool_cols:
         if c in df.columns:
-            df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0).astype(int)
+            df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
     for c in int_cols:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    # Aggregate to one row per game so the upsert key (game_id, season, week) works correctly.
+    agg = {"is_play_action": "mean", "is_motion": "mean",
+           "n_blitzers": "mean", "n_pass_rushers": "mean", "n_defense_box": "mean"}
+    agg = {k: v for k, v in agg.items() if k in df.columns}
+    df = df.groupby(["game_id", "season", "week"], as_index=False).agg(agg)
 
     return df.reset_index(drop=True)

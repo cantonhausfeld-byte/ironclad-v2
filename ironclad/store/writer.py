@@ -36,6 +36,24 @@ class _BaseWriter:
         self._conn.unregister(tmp)
         return len(df)
 
+    def _replace(self, df: pd.DataFrame, table: str, pk_cols: list[str]) -> int:
+        """Delete-then-insert upsert: overwrites existing rows by primary key."""
+        if df.empty:
+            return 0
+        df = df.drop_duplicates(subset=pk_cols, keep="last")
+        tmp = f"_tmp_{table.replace('.', '_')}"
+        self._conn.register(tmp, df)
+        pk_cond = " AND ".join(f"t.{c} = s.{c}" for c in pk_cols)
+        cols = ", ".join(df.columns)
+        self._conn.execute(
+            f"DELETE FROM {table} t USING {tmp} s WHERE {pk_cond}"
+        )
+        self._conn.execute(
+            f"INSERT INTO {table} ({cols}) SELECT {cols} FROM {tmp}"
+        )
+        self._conn.unregister(tmp)
+        return len(df)
+
     def _append(self, df: pd.DataFrame, table: str) -> int:
         """Append all rows unconditionally (bronze append-only log)."""
         if df.empty:
@@ -159,11 +177,11 @@ class SilverWriter(_BaseWriter):
 class GoldWriter(_BaseWriter):
     def write_team_features(self, df: pd.DataFrame) -> int:
         df = df.copy()
-        return self._upsert(df, "gold.team_game_features", ["game_id", "team"])
+        return self._replace(df, "gold.team_game_features", ["game_id", "team"])
 
     def write_player_features(self, df: pd.DataFrame) -> int:
         df = df.copy()
-        return self._upsert(df, "gold.player_game_features", ["game_id", "player_id"])
+        return self._replace(df, "gold.player_game_features", ["game_id", "player_id"])
 
     def write_prediction(self, df: pd.DataFrame) -> int:
         df = df.copy()

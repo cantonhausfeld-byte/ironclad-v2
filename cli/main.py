@@ -22,6 +22,18 @@ def cli() -> None:
     """ironclad-v2: NFL matchup forecasting."""
 
 
+def _validate_season(ctx, param, value):
+    if value is not None and not (1999 <= value <= 2030):
+        raise click.BadParameter(f"Season must be between 1999 and 2030, got {value}")
+    return value
+
+
+def _validate_week(ctx, param, value):
+    if value is not None and not (1 <= value <= 23):
+        raise click.BadParameter(f"Week must be between 1 and 23, got {value}")
+    return value
+
+
 # ── backfill ──────────────────────────────────────────────────────────────────
 
 @cli.command()
@@ -107,18 +119,6 @@ def report(game_id, home, away, week, season, fmt, output_dir, n_draws, backfill
     except ValueError as e:
         click.echo(f"ERROR: {e}", err=True)
         sys.exit(1)
-
-
-def _validate_season(ctx, param, value):
-    if value is not None and not (1999 <= value <= 2030):
-        raise click.BadParameter(f"Season must be between 1999 and 2030, got {value}")
-    return value
-
-
-def _validate_week(ctx, param, value):
-    if value is not None and not (1 <= value <= 23):
-        raise click.BadParameter(f"Week must be between 1 and 23, got {value}")
-    return value
 
 
 def _lookup_game_id(home: str, away: str, week: int, season: int) -> str | None:

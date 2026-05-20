@@ -50,7 +50,7 @@ class FeatureSnapshot:
         df = self._read_cached("silver.team_game_stats")
         df = df[df["team"] == team].copy()
         df = df[df["game_id"].isin(self._past_game_ids())]
-        return df.sort_values("week").tail(n)
+        return df.sort_values(["season", "week"]).tail(n)
 
     def team_season_games(self, team: str, season: int) -> pd.DataFrame:
         """All completed games for team in season, prior to cutoff."""
@@ -65,7 +65,7 @@ class FeatureSnapshot:
         df = self._read_cached("silver.player_game_stats")
         df = df[df["player_id"] == player_id].copy()
         df = df[df["game_id"].isin(self._past_game_ids())]
-        return df.sort_values("week").tail(n)
+        return df.sort_values(["season", "week"]).tail(n)
 
     def player_status(self, player_id: str, season: int, week: int) -> pd.Series | None:
         """Most recent injury/depth status for player as of cutoff."""
