@@ -51,12 +51,22 @@ class AutoRunWorkflow:
         from ironclad.workflow.weekly import WeeklyWorkflow
         weekly_result = WeeklyWorkflow().run(season, week)
 
-        # ── 3. Odds + player props ────────────────────────────────────────────
+        # ── 3. Injury refresh + odds + player props ───────────────────────────
+        from ironclad.store.writer import BronzeWriter
+        writer = BronzeWriter(conn=conn)
+
+        # Refresh injury reports for the current season so availability reflects
+        # the latest practice reports (updated Wed–Fri before each game).
+        try:
+            from ironclad.ingest.injuries import InjuryIngestor
+            inj_rows = InjuryIngestor(writer=writer).ingest(seasons=[season])
+            logger.info("Injury refresh: %d rows for season %d", inj_rows, season)
+        except Exception as exc:
+            logger.warning("Injury refresh failed (continuing): %s", exc)
+
         odds_rows = 0
         if not self.skip_odds:
             from ironclad.ingest.odds import OddsIngestor
-            from ironclad.store.writer import BronzeWriter
-            writer = BronzeWriter(conn=conn)
             try:
                 odds_rows = OddsIngestor(writer=writer, conn=conn).ingest()
                 logger.info("Odds ingest: %d rows", odds_rows)
