@@ -28,6 +28,13 @@ def _validate_season(ctx, param, value):
     return value
 
 
+def _validate_seasons(ctx, param, value):
+    for s in value:
+        if not (1999 <= s <= 2030):
+            raise click.BadParameter(f"Season must be between 1999 and 2030, got {s}")
+    return value
+
+
 def _validate_week(ctx, param, value):
     if value is not None and not (1 <= value <= 23):
         raise click.BadParameter(f"Week must be between 1 and 23, got {value}")
@@ -37,7 +44,7 @@ def _validate_week(ctx, param, value):
 # ── backfill ──────────────────────────────────────────────────────────────────
 
 @cli.command()
-@click.option("--seasons", "-s", multiple=True, type=int,
+@click.option("--seasons", "-s", multiple=True, type=int, callback=_validate_seasons,
               help="Seasons to backfill (can repeat: -s 2022 -s 2023)")
 @click.option("--season", type=int, default=None, callback=_validate_season, is_eager=False,
               help="Single season shorthand")
