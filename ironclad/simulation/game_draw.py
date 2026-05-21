@@ -122,8 +122,8 @@ class GameDraw:
         away_gqf = float(rng.normal(0.0, 0.15))
 
         # ── Yardage ───────────────────────────────────────────────────────────
-        home_pass_yards = max(0.0, float(rng.normal(home_pass_att * 7.2, home_pass_att * 2.5)))
-        away_pass_yards = max(0.0, float(rng.normal(away_pass_att * 7.2, away_pass_att * 2.5)))
+        home_pass_yards = max(0.0, float(rng.normal(home_pass_att * 7.8, home_pass_att * 2.5)))
+        away_pass_yards = max(0.0, float(rng.normal(away_pass_att * 7.8, away_pass_att * 2.5)))
         home_rush_yards = max(0.0, float(rng.normal(home_rush_att * 4.3, 25.0)))
         away_rush_yards = max(0.0, float(rng.normal(away_rush_att * 4.3, 25.0)))
 

@@ -208,4 +208,4 @@ def test_team_pass_yards_calibrated():
     rng = np.random.default_rng(99)
     pass_yards = [gd.draw(rng, outcome, home_env, away_env).home_pass_yards for _ in range(2000)]
     mean_yds = float(np.mean(pass_yards))
-    assert 215 < mean_yds < 295, f"Mean pass yards {mean_yds:.1f} out of expected range"
+    assert 240 < mean_yds < 320, f"Mean pass yards {mean_yds:.1f} out of expected range"

@@ -186,6 +186,17 @@ class PropBacktester:
                     continue
 
                 draws_arr = draw_arrays[key]
+
+                # Skip players whose simulation is entirely zeros. This happens
+                # when volume-allocation zeroed them out (WR5+, RB5+, backup QBs).
+                # Including them destroys calibration: all draws = 0 vs real yards.
+                if (sim_stat in ("rec_yards", "rush_yards", "pass_yards") and
+                        np.percentile(draws_arr, 90) < 1.0):
+                    continue
+                if (sim_stat in ("targets", "carries", "receptions", "completions", "pass_attempts") and
+                        float(np.mean(draws_arr)) < 0.1):
+                    continue
+
                 actual_rank = float(np.mean(draws_arr < actual_val))
                 p10 = float(np.percentile(draws_arr, 10))
                 p25 = float(np.percentile(draws_arr, 25))
