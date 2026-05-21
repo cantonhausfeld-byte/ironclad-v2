@@ -174,7 +174,7 @@ class PlayerEfficiencyModel(BaseModel):
             "td_rate_per_target":   td_rate,
             "td_rate_per_carry":    priors["td_rate_carry"],
             "yards_per_target_std": max(0.5, ypa * 0.7),
-            "yards_per_carry_std":  priors["yds_per_carry"] * 1.5,
+            "yards_per_carry_std":  priors["yds_per_carry"] * 2.1,
         }
 
     def _predict_trained(self, X: pd.DataFrame, pos: str) -> dict:
@@ -205,7 +205,7 @@ class PlayerEfficiencyModel(BaseModel):
             "td_rate_per_target": td_rate_tgt,
             "td_rate_per_carry": td_rate_carry,
             "yards_per_target_std": max(0.5, yds_per_tgt * 0.7),
-            "yards_per_carry_std": max(0.5, yds_per_carry * 1.5),
+            "yards_per_carry_std": max(0.5, yds_per_carry * 2.1),
         }
 
     def _predict_stub(self, X: pd.DataFrame, pos: str) -> dict:
@@ -245,5 +245,5 @@ class PlayerEfficiencyModel(BaseModel):
             "td_rate_per_target": td_rate_tgt,
             "td_rate_per_carry": td_rate_carry,
             "yards_per_target_std": (yds_per_tgt or 8.0) * 0.7,
-            "yards_per_carry_std": (yds_per_carry or 4.2) * 1.5,
+            "yards_per_carry_std": (yds_per_carry or 4.2) * 2.1,
         }
