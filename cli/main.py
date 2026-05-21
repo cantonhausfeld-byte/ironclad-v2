@@ -730,6 +730,94 @@ def serve(port, host) -> None:
         sys.exit(1)
 
 
+# ── prop-backtest ──────────────────────────────────────────────────────────────
+
+@cli.command("prop-backtest")
+@click.option("--season", required=True, type=int, callback=_validate_season,
+              help="NFL season to backtest (e.g. 2025)")
+@click.option("--weeks", default=None,
+              help="Week range or comma list (e.g. '10-18' or '10,11,12'). Default: all.")
+@click.option("--n-draws", default=500, show_default=True, type=int,
+              help="Simulation draws per game (500 fast; 2000 for production calibration)")
+@click.option("--positions", default="WR,RB,TE,QB", show_default=True,
+              help="Comma-separated positions to include")
+@click.option("--save", is_flag=True, default=False,
+              help="Persist rows to gold.player_prop_backtest")
+def prop_backtest(season, weeks, n_draws, positions, save) -> None:
+    """Backtest player prop distributions vs. actual outcomes.
+
+    Simulates each completed game in the season, then compares projected
+    p10/p50/p90 distributions to actual stats from silver.player_game_stats.
+    Prints a calibration table by position and stat type.
+    """
+    from ironclad.eval.prop_backtester import PropBacktester, summarize
+
+    pos_set = {p.strip().upper() for p in positions.split(",")}
+
+    week_list: list[int] | None = None
+    if weeks:
+        week_list = _parse_seasons(weeks)  # reuses the same range/comma parser
+        if not week_list:
+            click.echo("ERROR: Could not parse --weeks value", err=True)
+            sys.exit(1)
+
+    click.echo(
+        f"Player Prop Calibration — Season {season} "
+        f"(n={n_draws} draws, positions={sorted(pos_set)}, weeks={week_list or 'all'})"
+    )
+    click.echo("Simulating games — this may take several minutes...")
+
+    bt = PropBacktester()
+    df = bt.run(season=season, weeks=week_list, n_draws=n_draws, positions=pos_set, save=save)
+
+    if df.empty:
+        click.echo("No results. Check that the season is backfilled and games are completed.")
+        return
+
+    n_games = df["game_id"].nunique()
+    click.echo(
+        f"\nResults: {len(df)} player-game-stat rows across {n_games} games\n"
+    )
+
+    summary = summarize(df[df["position"] != "all"] if "all" not in df["position"].values else df)
+
+    click.echo(
+        f"{'stat_type':<15} {'pos':<5} {'N':>5}  {'cov80':>6}  "
+        f"{'med_mae':>8}  {'bias_p50':>9}"
+    )
+    click.echo("-" * 56)
+
+    for _, row in summary[summary["position"] != "all"].iterrows():
+        cov = f"{row['coverage_80pct']:.1%}"
+        mae = f"{row['median_p50_mae']:.1f}"
+        bias = f"{row['bias_p50']:+.2f}"
+        click.echo(
+            f"{row['stat_type']:<15} {row['position']:<5} {row['N']:>5}  "
+            f"{cov:>6}  {mae:>8}  {bias:>9}"
+        )
+
+    # Key takeaways
+    click.echo("\nKEY TAKEAWAYS")
+    for _, row in summary[summary["position"] != "all"].iterrows():
+        cov = row["coverage_80pct"]
+        stat = f"{row['stat_type']} ({row['position']})"
+        if 0.77 <= cov <= 0.83:
+            click.echo(f"  ✓ {stat}: well calibrated ({cov:.1%} coverage)")
+        elif cov < 0.77:
+            click.echo(
+                f"  ⚠ {stat}: overconfident ({cov:.1%} < 80%) — "
+                f"bias {row['bias_p50']:+.2f}"
+            )
+        else:
+            click.echo(
+                f"  ⚠ {stat}: underconfident ({cov:.1%} > 80%) — "
+                f"bias {row['bias_p50']:+.2f}"
+            )
+
+    if save:
+        click.echo(f"\nSaved {len(df)} rows to gold.player_prop_backtest")
+
+
 # ── api ───────────────────────────────────────────────────────────────────────
 
 @cli.command("api")

@@ -742,6 +742,33 @@ def _gold(conn: duckdb.DuckDBPyConnection) -> None:
     )
     """)
 
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS gold.player_prop_backtest (
+        backtest_id    VARCHAR NOT NULL,
+        run_at         TIMESTAMPTZ NOT NULL,
+        season         INTEGER NOT NULL,
+        week           INTEGER NOT NULL,
+        game_id        VARCHAR NOT NULL,
+        player_id      VARCHAR NOT NULL,
+        player_name    VARCHAR,
+        team           VARCHAR,
+        position       VARCHAR,
+        stat_type      VARCHAR NOT NULL,
+        n_draws        INTEGER,
+        predicted_p10  FLOAT,
+        predicted_p25  FLOAT,
+        predicted_p50  FLOAT,
+        predicted_p75  FLOAT,
+        predicted_p90  FLOAT,
+        predicted_mean FLOAT,
+        actual_value   FLOAT,
+        actual_rank    FLOAT,
+        covered_80pct  BOOLEAN,
+        abs_error_p50  FLOAT,
+        PRIMARY KEY (backtest_id, game_id, player_id, stat_type)
+    )
+    """)
+
 
 # ── Migrations (additive column additions for existing DBs) ───────────────────
 
