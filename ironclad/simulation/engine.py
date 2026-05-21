@@ -156,6 +156,7 @@ class MonteCarloEngine:
 
         contexts = _allocate_qb_pass_volume(contexts)
         contexts = _allocate_rb_rush_volume(contexts)
+        contexts = _allocate_wr_target_volume(contexts)
         return contexts
 
 
@@ -171,6 +172,22 @@ def _allocate_rb_rush_volume(contexts: list[PlayerContext]) -> list[PlayerContex
     rbs.sort(key=lambda c: c.carries_projected, reverse=True)
     for ctx in rbs[4:]:
         ctx.carries_projected = 0.0
+    return contexts
+
+
+def _allocate_wr_target_volume(contexts: list[PlayerContext]) -> list[PlayerContext]:
+    """Zero targets for WRs ranked 5th or lower by projected targets.
+
+    With 6+ WRs simulated, the reconciler scale factor drops below 1.0 and
+    each WR gets fewer yards than their true expected share. Concentrating
+    volume on the top 4 WRs matches real NFL distributions.
+    """
+    wrs = [ctx for ctx in contexts if ctx.position == "WR"]
+    if len(wrs) <= 4:
+        return contexts
+    wrs.sort(key=lambda c: c.targets_projected, reverse=True)
+    for ctx in wrs[4:]:
+        ctx.targets_projected = 0.0
     return contexts
 
 

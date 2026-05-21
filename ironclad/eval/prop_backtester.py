@@ -177,15 +177,12 @@ class PropBacktester:
                 if sim_stat in _POSITION_STAT_SKIP.get(position, set()):
                     continue
 
-                # Skip low-activity players to avoid noise from incidental touches:
-                # require ≥2 actual targets for receiving stats, ≥3 actual carries
-                # for rushing stats. This removes backup RBs with 1-2 garbage-time
-                # carries whose historical projections are far higher than their usage.
-                if sim_stat in ("rec_yards", "targets", "receptions") and actual_row.get("targets", 0) < 2:
+                # Skip players who did not participate (DNP).
+                if sim_stat in ("rec_yards", "targets", "receptions") and actual_row.get("targets", 0) == 0:
                     continue
-                if sim_stat in ("rush_yards", "carries") and actual_row.get("carries", 0) < 3:
+                if sim_stat in ("rush_yards", "carries") and actual_row.get("carries", 0) == 0:
                     continue
-                if sim_stat in ("pass_yards", "completions", "pass_attempts") and actual_row.get("pass_attempts", 0) < 5:
+                if sim_stat in ("pass_yards", "completions", "pass_attempts") and actual_row.get("pass_attempts", 0) == 0:
                     continue
 
                 draws_arr = draw_arrays[key]
