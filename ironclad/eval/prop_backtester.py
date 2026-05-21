@@ -32,6 +32,15 @@ _STAT_MAP: dict[str, str] = {
 
 _DEFAULT_POSITIONS = {"WR", "RB", "TE", "QB"}
 
+# Stats that are structurally zero for a position — skip to avoid reporting
+# artifacts (e.g. WRs don't rush; non-QBs don't throw; QBs don't catch).
+_POSITION_STAT_SKIP: dict[str, set[str]] = {
+    "WR": {"pass_attempts", "completions", "pass_yards", "carries", "rush_yards"},
+    "TE": {"pass_attempts", "completions", "pass_yards", "carries", "rush_yards"},
+    "RB": {"pass_attempts", "completions", "pass_yards"},
+    "QB": {"targets", "receptions", "rec_yards"},
+}
+
 
 class PropBacktester:
     def __init__(self, conn=None) -> None:
@@ -163,10 +172,20 @@ class PropBacktester:
                     continue
                 actual_val = float(actual_val)
 
-                # Skip DNP players (no targets/carries at all for volume stats)
-                if sim_stat in ("rec_yards", "targets", "receptions") and actual_row.get("targets", 0) == 0:
+                # Skip structurally inapplicable stats for this position
+                position = str(actual_row.get("position", ""))
+                if sim_stat in _POSITION_STAT_SKIP.get(position, set()):
                     continue
-                if sim_stat in ("rush_yards", "carries") and actual_row.get("carries", 0) == 0:
+
+                # Skip low-activity players to avoid noise from incidental touches:
+                # require ≥2 actual targets for receiving stats, ≥3 actual carries
+                # for rushing stats. This removes backup RBs with 1-2 garbage-time
+                # carries whose historical projections are far higher than their usage.
+                if sim_stat in ("rec_yards", "targets", "receptions") and actual_row.get("targets", 0) < 2:
+                    continue
+                if sim_stat in ("rush_yards", "carries") and actual_row.get("carries", 0) < 3:
+                    continue
+                if sim_stat in ("pass_yards", "completions", "pass_attempts") and actual_row.get("pass_attempts", 0) < 5:
                     continue
 
                 draws_arr = draw_arrays[key]

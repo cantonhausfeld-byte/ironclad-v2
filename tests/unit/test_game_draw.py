@@ -193,3 +193,22 @@ def test_game_draw_sets_quality_factors():
     assert len(set(factors_away)) > 1
     # Most draws should land within ±3σ = ±0.45 of zero.
     assert all(-0.6 < f < 0.6 for f in factors_home + factors_away)
+
+
+def test_team_pass_yards_calibrated():
+    # Calibrated from actual 2025 data: 209.8 yds / 34.6 att = 6.07 yds/att.
+    # With pass_rate≈0.58 and plays≈64, we expect ~37 pass_att → ~226 yards mean.
+    # Allow ±20 yds band to account for sampling noise at n=2000.
+    home_env = {"pass_rate_projected": 0.58, "total_plays_projected": 64}
+    away_env = {"pass_rate_projected": 0.55, "total_plays_projected": 62}
+    outcome = {
+        "total_mean": 47.0, "total_std": 8.0,
+        "home_margin_mean": 0.0, "home_margin_std": 14.0,
+    }
+    gd = GameDraw()
+    rng = np.random.default_rng(99)
+    pass_yards = [gd.draw(rng, outcome, home_env, away_env).home_pass_yards for _ in range(2000)]
+    mean_yds = float(np.mean(pass_yards))
+    # Should land between 190 and 240 (actual NFL avg ≈ 210, reasonable band given
+    # pass_att draws and game-script variance).
+    assert 190 < mean_yds < 240, f"Mean pass yards {mean_yds:.1f} out of expected range"

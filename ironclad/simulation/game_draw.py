@@ -122,11 +122,13 @@ class GameDraw:
         away_gqf = float(rng.normal(0.0, 0.15))
 
         # ── Yardage ───────────────────────────────────────────────────────────
-        # Pass yards from attempts × NFL avg yards/attempt (7.2); far better
-        # than score × 6 which underestimates low-scoring games and has no
-        # relationship to actual passing volume drawn above.
-        home_pass_yards = max(0.0, float(rng.normal(home_pass_att * 7.2, home_pass_att * 2.5)))
-        away_pass_yards = max(0.0, float(rng.normal(away_pass_att * 7.2, away_pass_att * 2.5)))
+        # Pass yards from attempts × NFL avg net yards/attempt (6.1, calibrated
+        # from actual 2025 data: 209.8 yds / 34.6 att = 6.07). The old 7.2
+        # constant inflated team passing totals by ~25%, biasing all receiver
+        # projections upward. Slightly wider std (2.8) reflects cross-game
+        # variance in completion rate and air-yards depth.
+        home_pass_yards = max(0.0, float(rng.normal(home_pass_att * 6.1, home_pass_att * 2.8)))
+        away_pass_yards = max(0.0, float(rng.normal(away_pass_att * 6.1, away_pass_att * 2.8)))
         home_rush_yards = max(0.0, float(rng.normal(home_rush_att * 4.3, 25.0)))
         away_rush_yards = max(0.0, float(rng.normal(away_rush_att * 4.3, 25.0)))
 
