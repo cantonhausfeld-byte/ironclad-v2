@@ -129,8 +129,8 @@ class GameDraw:
         # same reason — RB starter carries are under-projected by UsageModel.
         home_pass_yards = max(0.0, float(rng.normal(home_pass_att * 9.0, home_pass_att * 2.8)))
         away_pass_yards = max(0.0, float(rng.normal(away_pass_att * 9.0, away_pass_att * 2.8)))
-        home_rush_yards = max(0.0, float(rng.normal(home_rush_att * 5.4, 30.0)))
-        away_rush_yards = max(0.0, float(rng.normal(away_rush_att * 5.4, 30.0)))
+        home_rush_yards = max(0.0, float(rng.normal(home_rush_att * 5.4, home_rush_att * 2.2)))
+        away_rush_yards = max(0.0, float(rng.normal(away_rush_att * 5.4, away_rush_att * 2.2)))
 
         return GameDrawResult(
             home_score=home_score,
