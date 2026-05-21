@@ -196,8 +196,9 @@ def test_game_draw_sets_quality_factors():
 
 
 def test_team_pass_yards_calibrated():
-    # With pass_rate≈0.58 and plays≈64, we expect ~37 pass_att × 7.2 yds/att ≈ 266 yards.
-    # Allow ±25 yds band to account for sampling noise at n=2000.
+    # With pass_rate≈0.58 and plays≈64, we expect ~37 pass_att × 9.0 yds/att ≈ 333 yards.
+    # The 9.0 multiplier is intentionally above actual net ypa (~6.0) to compensate
+    # for UsageModel under-projecting WR/TE volume (scale factor correction).
     home_env = {"pass_rate_projected": 0.58, "total_plays_projected": 64}
     away_env = {"pass_rate_projected": 0.55, "total_plays_projected": 62}
     outcome = {
@@ -208,4 +209,4 @@ def test_team_pass_yards_calibrated():
     rng = np.random.default_rng(99)
     pass_yards = [gd.draw(rng, outcome, home_env, away_env).home_pass_yards for _ in range(2000)]
     mean_yds = float(np.mean(pass_yards))
-    assert 240 < mean_yds < 320, f"Mean pass yards {mean_yds:.1f} out of expected range"
+    assert 300 < mean_yds < 380, f"Mean pass yards {mean_yds:.1f} out of expected range"
