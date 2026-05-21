@@ -55,11 +55,16 @@ class Reconciler:
                 p.targets = max(0, round(p.targets * scale))
                 p.receptions = max(0, min(p.targets, round(p.receptions * scale)))
 
-        # QB pass_yards = total receiving yards (same yardage pool, now reconciled)
-        total_rec_after = sum(p.rec_yards for p in players)
+        # QB pass_yards: drawn independently using calibrated NFL net yds/att (6.0).
+        # Decoupled from total_rec_after so WR/TE scale and QB calibration are
+        # independent — team_pass_yards (used above for WR scale) is intentionally
+        # higher than net pass yards to correct for under-projected player volumes.
         for p in players:
             if p.pass_attempts > 0:
-                p.pass_yards = total_rec_after
+                p.pass_yards = max(
+                    0.0,
+                    float(rng.normal(p.pass_attempts * 6.0, p.pass_attempts * 1.8)),
+                )
 
         total_rush = sum(p.rush_yards for p in players)
         if total_rush > 0:
