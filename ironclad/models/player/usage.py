@@ -13,8 +13,8 @@ from ironclad.models.team.game_outcome import _sample_weights
 logger = logging.getLogger(__name__)
 
 _POSITION_PRIORS = {
-    "QB":  {"targets": 0.0,  "carries": 3.5,  "pass_attempts": 32.0},
-    "RB":  {"targets": 3.5,  "carries": 12.0, "pass_attempts": 0.0},
+    "QB":  {"targets": 0.0,  "carries": 6.0,  "pass_attempts": 32.0},
+    "RB":  {"targets": 3.5,  "carries": 18.0, "pass_attempts": 0.0},
     "WR":  {"targets": 5.5,  "carries": 0.2,  "pass_attempts": 0.0},
     "TE":  {"targets": 4.0,  "carries": 0.0,  "pass_attempts": 0.0},
     "FB":  {"targets": 1.5,  "carries": 2.0,  "pass_attempts": 0.0},
@@ -147,7 +147,7 @@ class PlayerUsageModel(BaseModel):
         starter_proxy = depth is not None and depth <= 2
 
         targets = (target_share * 32.0 * volume_scale) if target_share else (priors["targets"] * volume_scale if starter_proxy else 0.0)
-        carries = (carry_share * 25.0 * volume_scale) if carry_share else (priors["carries"] * volume_scale if starter_proxy else 0.0)
+        carries = (carry_share * 27.6 * volume_scale) if carry_share else (priors["carries"] * volume_scale if starter_proxy else 0.0)
         pass_att = priors.get("pass_attempts", 0.0) * volume_scale
 
         return {

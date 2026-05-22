@@ -125,12 +125,13 @@ class GameDraw:
         # team_pass_yards is intentionally ~49% above actual net yds/att (6.0)
         # to compensate for UsageModel under-projecting individual WR/TE volume.
         # QB pass_yards in reconciler are drawn independently from N(att*6.0, …).
-        # team_rush_yards is intentionally ~26% above actual ypc (4.3) for the
-        # same reason — RB starter carries are under-projected by UsageModel.
+        # team_rush_yards is ~12% above actual ypc (4.3); prior fix (RB 12→18,
+        # QB 3.5→6) closes most of the UsageModel under-projection gap so the
+        # multiplier can be reduced from 5.4 to 4.8.
         home_pass_yards = max(0.0, float(rng.normal(home_pass_att * 9.0, home_pass_att * 2.8)))
         away_pass_yards = max(0.0, float(rng.normal(away_pass_att * 9.0, away_pass_att * 2.8)))
-        home_rush_yards = max(0.0, float(rng.normal(home_rush_att * 5.4, home_rush_att * 2.2)))
-        away_rush_yards = max(0.0, float(rng.normal(away_rush_att * 5.4, away_rush_att * 2.2)))
+        home_rush_yards = max(0.0, float(rng.normal(home_rush_att * 4.8, home_rush_att * 2.2)))
+        away_rush_yards = max(0.0, float(rng.normal(away_rush_att * 4.8, away_rush_att * 2.2)))
 
         return GameDrawResult(
             home_score=home_score,
