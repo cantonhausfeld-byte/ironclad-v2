@@ -125,7 +125,13 @@ class PlayerDraw:
         # ── Passing (QB) ──────────────────────────────────────────────────────
         if ctx.position == "QB" and ctx.pass_attempts_projected > 0:
             lam = max(0.0, ctx.pass_attempts_projected * pass_scale)
-            pass_att = poisson_draw(rng, lam)
+            # Negative-binomial instead of Poisson: real NFL QB pass attempts
+            # have std ≈ 9-10 (game-script, blowout, weather variance); Poisson
+            # gives std ≈ 6 which is too narrow and causes under-coverage.
+            # r=12 → var = lam*(1 + lam/12), std ≈ 9 at lam=32.
+            r_att = 12
+            p_att = r_att / (r_att + lam) if lam > 0 else 0.5
+            pass_att = int(rng.negative_binomial(r_att, p_att))
             # Clamp to realistic NFL completion rate range; ctx.catch_rate may
             # reflect a receiving catch rate (meaningless for QBs) rather than
             # pass completion rate. Apply game-quality factor to QB accuracy.

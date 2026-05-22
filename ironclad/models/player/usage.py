@@ -136,8 +136,10 @@ class PlayerUsageModel(BaseModel):
 
     def _predict_stub(self, X: pd.DataFrame, pos: str, availability: float) -> dict:
         priors = _POSITION_PRIORS.get(pos, _DEFAULT_PRIOR)
-        team_total = _col(X, "team_implied_total", 23.0)
-        volume_scale = team_total / 23.0
+        # team_implied_total stores the full game over/under (~46 avg), not the
+        # per-team total. Normalise against 46 so average games yield scale ≈ 1.0.
+        team_total = _col(X, "team_implied_total", 46.0)
+        volume_scale = team_total / 46.0
         target_share = _col(X, "target_share_l4", None)
         carry_share = _col(X, "carry_share_l4", None)
 
