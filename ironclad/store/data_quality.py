@@ -76,7 +76,9 @@ def check_row_counts(conn, season: int) -> dict[str, Any]:
         except Exception as exc:
             logger.warning("Row count failed for %s: %s", table, exc)
             counts[table] = -1
-    passed = all(v > 0 for v in counts.values())
+    # betting_edges is a bet-output table; being empty before any bets are saved
+    # is normal and must not fail the data-ingestion quality gate.
+    passed = all(v > 0 for t, v in counts.items() if t != "gold.betting_edges")
     return {"counts": counts, "passed": passed}
 
 
