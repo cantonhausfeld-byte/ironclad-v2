@@ -10,6 +10,7 @@ from ironclad.features.team_features import TeamFeatureBuilder
 from ironclad.features.player_features import PlayerFeatureBuilder
 from ironclad.store.connection import get_connection
 from ironclad.store.schema import create_all_tables
+from ironclad.store.data_quality import log_quality_report
 
 logger = logging.getLogger(__name__)
 
@@ -73,6 +74,9 @@ class BackfillWorkflow:
             backfiller = TargetBackfiller(conn)
             target_counts = backfiller.run(seasons)
             logger.info("Target backfill counts: %s", target_counts)
+
+            for season in seasons:
+                log_quality_report(conn, season)
 
         logger.info("Backfill complete for seasons %s", seasons)
         return {

@@ -12,6 +12,7 @@ from ironclad.store.connection import get_connection
 from ironclad.store.schema import create_all_tables
 from ironclad.store.silver import SilverTransformer
 from ironclad.store.targets import TargetBackfiller
+from ironclad.store.data_quality import log_quality_report
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +84,9 @@ class WeeklyWorkflow:
         backfiller = TargetBackfiller(conn)
         target_counts = backfiller.run([season])
         logger.info("Target backfill counts: %s", target_counts)
+
+        # ── 4b. Data quality report ───────────────────────────────────────────
+        log_quality_report(conn, season)
 
         # ── 5. Summary ────────────────────────────────────────────────────────
         if games.empty:

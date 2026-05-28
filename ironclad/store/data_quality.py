@@ -32,6 +32,30 @@ _ROW_COUNT_TABLES = [
     "gold.betting_edges",
 ]
 
+# Bronze sources required to resolve player position / starter depth. When empty,
+# player features silently fall back to UNK positions and prior-only volume.
+_REQUIRED_BRONZE = ["bronze.rosters", "bronze.depth_charts"]
+
+
+def check_required_sources(conn, season: int) -> dict[str, Any]:
+    """Count rows in bronze sources critical to position/starter resolution.
+
+    Returns {counts: {table: int}, passed: bool}. passed is True only if all
+    required sources have at least one row for the season.
+    """
+    counts: dict[str, int] = {}
+    for table in _REQUIRED_BRONZE:
+        try:
+            n = conn.execute(
+                f"SELECT COUNT(*) FROM {table} WHERE season = ?", [season]
+            ).fetchone()[0]
+            counts[table] = int(n)
+        except Exception as exc:
+            logger.warning("Source count failed for %s: %s", table, exc)
+            counts[table] = -1
+    passed = all(v > 0 for v in counts.values())
+    return {"counts": counts, "passed": passed}
+
 
 def check_row_counts(conn, season: int) -> dict[str, Any]:
     """Count rows per key table for the given season.
@@ -160,6 +184,7 @@ def run_all_checks(conn, season: int) -> dict[str, Any]:
         and epa_range["passed"]
         and completeness_passed
     )
+    sources = check_required_sources(conn, season)
     return {
         "season": season,
         "row_counts": row_counts,
@@ -167,5 +192,45 @@ def run_all_checks(conn, season: int) -> dict[str, Any]:
         "epa_range": epa_range,
         "completeness_score": completeness,
         "completeness_passed": completeness_passed,
-        "passed": all_passed,
+        "sources": sources,
+        "passed": all_passed and sources["passed"],
     }
+
+
+def log_quality_report(conn, season: int) -> dict[str, Any]:
+    """Run all checks and log a readable summary. Never raises.
+
+    Emits loud WARNINGs for the failure modes that silently degrade forecasts
+    (empty roster/depth-chart sources, low gold completeness) so they surface
+    during backfill/weekly runs instead of only via the manual `validate` command.
+    Returns the full results dict from run_all_checks.
+    """
+    results = run_all_checks(conn, season)
+    sources = results["sources"]
+
+    for table, n in sources["counts"].items():
+        if n <= 0:
+            logger.warning(
+                "DATA QUALITY: %s is EMPTY for season %d — player positions/starters "
+                "will fall back to UNK and prior-only volume. Re-run backfill or check "
+                "the upstream source.",
+                table, season,
+            )
+    if not results["completeness_passed"]:
+        logger.warning(
+            "DATA QUALITY: gold feature completeness %.1f%% < 70%% for season %d — "
+            "features lean heavily on league priors.",
+            results["completeness_score"] * 100, season,
+        )
+    if results["passed"]:
+        logger.info(
+            "Data quality OK for season %d (completeness %.1f%%)",
+            season, results["completeness_score"] * 100,
+        )
+    else:
+        logger.warning(
+            "Data quality checks FAILED for season %d — see warnings above; "
+            "run `ironclad validate --season %d` for the full report.",
+            season, season,
+        )
+    return results

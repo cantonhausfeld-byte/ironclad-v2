@@ -91,9 +91,78 @@ class SilverTransformer:
             )
         )
         df = df.drop(columns=["home_moneyline", "away_moneyline"])
+
+        # Overlay a true multi-book consensus from bronze.odds where we have it
+        # (live/upcoming games). Historical games were never fetched live, so
+        # bronze.odds has no row for them and they keep the nfl_data_py opening
+        # line. Until this overlay, spread_consensus/total_consensus were just
+        # the opening line despite the "consensus" name.
+        df = self._overlay_odds_consensus(df)
+
         df["home_team"] = normalize_teams(df["home_team"])
         df["away_team"] = normalize_teams(df["away_team"])
         return self._writer.write_games(df)
+
+    def _overlay_odds_consensus(self, games: pd.DataFrame) -> pd.DataFrame:
+        """Replace opening-line odds with a vig-stripped multi-book consensus.
+
+        Aggregates across sportsbooks in bronze.odds (median spread/total,
+        median vig-stripped home win prob) per game_id and overrides the
+        matching rows in `games`. Returns `games` unchanged if bronze.odds is
+        empty (the common historical-backfill case).
+        """
+        cons = self._consensus_from_odds()
+        if cons.empty:
+            return games
+        games = games.merge(cons, on="game_id", how="left")
+        s = games["cons_spread"].notna()
+        games.loc[s, "spread_consensus"] = games.loc[s, "cons_spread"]
+        t = games["cons_total"].notna()
+        games.loc[t, "total_consensus"] = games.loc[t, "cons_total"]
+        p = games["cons_home_prob"].notna()
+        games.loc[p, "home_ml_implied"] = games.loc[p, "cons_home_prob"]
+        games.loc[p, "away_ml_implied"] = 1.0 - games.loc[p, "cons_home_prob"]
+        return games.drop(columns=["cons_spread", "cons_total", "cons_home_prob"])
+
+    def _consensus_from_odds(self) -> pd.DataFrame:
+        """One consensus row per game_id from bronze.odds, or empty if none.
+
+        bronze.odds holds at most one row per (game_id, source) — the latest
+        fetch — so a simple cross-book aggregate is the consensus. Spreads are
+        sign-flipped: The Odds API quotes the home handicap (negative = home
+        favored) whereas silver.games stores spread_consensus as positive when
+        the home team is favored.
+        """
+        try:
+            odds = self._conn.execute(
+                "SELECT game_id, spread_home, total_over, "
+                "moneyline_home, moneyline_away FROM bronze.odds"
+            ).df()
+        except Exception:
+            return pd.DataFrame()
+        if odds.empty:
+            return pd.DataFrame()
+
+        rows = []
+        for game_id, grp in odds.groupby("game_id"):
+            spread = grp["spread_home"].median(skipna=True)
+            total = grp["total_over"].median(skipna=True)
+            home_probs = [
+                hp for hp in (
+                    _devig_home_prob(r["moneyline_home"], r["moneyline_away"])
+                    for _, r in grp.iterrows()
+                )
+                if hp is not None
+            ]
+            rows.append({
+                "game_id": game_id,
+                "cons_spread": None if pd.isna(spread) else -float(spread),
+                "cons_total": None if pd.isna(total) else float(total),
+                "cons_home_prob": (
+                    float(pd.Series(home_probs).median()) if home_probs else None
+                ),
+            })
+        return pd.DataFrame(rows)
 
     # ── silver.team_game_stats ────────────────────────────────────────────────
 
@@ -427,18 +496,31 @@ class SilverTransformer:
         return f"WHERE {col} IN ({s})"
 
 
-def _remove_vig(ml_home, ml_away) -> tuple[float, float]:
-    def to_prob(ml):
-        if ml is None or pd.isna(ml):
-            return None
-        ml = float(ml)
-        if ml > 0:
-            return 100.0 / (ml + 100.0)
-        else:
-            return abs(ml) / (abs(ml) + 100.0)
+def _ml_to_prob(ml):
+    """Implied (vig-included) probability from one American moneyline, or None."""
+    if ml is None or pd.isna(ml):
+        return None
+    ml = float(ml)
+    if ml > 0:
+        return 100.0 / (ml + 100.0)
+    return abs(ml) / (abs(ml) + 100.0)
 
-    p_h, p_a = to_prob(ml_home), to_prob(ml_away)
+
+def _devig_home_prob(ml_home, ml_away):
+    """Vig-stripped home win probability from one book's two-sided moneyline.
+
+    Returns None if either side is missing (so callers can skip that book
+    rather than fall back to a league prior).
+    """
+    p_h, p_a = _ml_to_prob(ml_home), _ml_to_prob(ml_away)
     if p_h is None or p_a is None:
-        return 0.573, 0.427
+        return None
     total = p_h + p_a
-    return p_h / total, p_a / total
+    return p_h / total if total > 0 else None
+
+
+def _remove_vig(ml_home, ml_away) -> tuple[float, float]:
+    p_h = _devig_home_prob(ml_home, ml_away)
+    if p_h is None:
+        return 0.573, 0.427
+    return p_h, 1.0 - p_h
