@@ -743,7 +743,14 @@ def serve(port, host) -> None:
               help="Comma-separated positions to include")
 @click.option("--save", is_flag=True, default=False,
               help="Persist rows to gold.player_prop_backtest")
-def prop_backtest(season, weeks, n_draws, positions, save) -> None:
+@click.option("--roi", is_flag=True, default=False,
+              help="Also print an APPROXIMATE prop-betting ROI vs a synthetic line "
+                   "(no historical prop lines exist; see --line-mode)")
+@click.option("--line-mode", default="season_mean",
+              type=click.Choice(["season_mean", "model_p50"]), show_default=True,
+              help="Synthetic line for --roi: season_mean (sharp-book proxy, "
+                   "optimistic) or model_p50 (null baseline)")
+def prop_backtest(season, weeks, n_draws, positions, save, roi, line_mode) -> None:
     """Backtest player prop distributions vs. actual outcomes.
 
     Simulates each completed game in the season, then compares projected
@@ -816,6 +823,31 @@ def prop_backtest(season, weeks, n_draws, positions, save) -> None:
 
     if save:
         click.echo(f"\nSaved {len(df)} rows to gold.player_prop_backtest")
+
+    if roi:
+        from ironclad.eval.prop_profitability import approximate_prop_roi, summarize_roi
+
+        bets = approximate_prop_roi(df, line_mode=line_mode)
+        click.echo(
+            f"\nAPPROXIMATE PROP ROI — line_mode={line_mode} @ -110\n"
+            "  (no historical prop lines exist; season_mean is a sharp-book proxy "
+            "and an\n   optimistic necessary-condition test, NOT a tradeable ROI)\n"
+        )
+        if bets.empty:
+            click.echo("  No bets produced.")
+        else:
+            roi_summary = summarize_roi(bets)
+            click.echo(
+                f"  {'stat_type':<14} {'pos':<5} {'bets':>5} {'hit':>7} "
+                f"{'roi':>8} {'avg_ev':>8} {'units':>8}"
+            )
+            click.echo("  " + "-" * 58)
+            for _, r in roi_summary.iterrows():
+                click.echo(
+                    f"  {r['stat_type']:<14} {r['position']:<5} {int(r['n_bets']):>5} "
+                    f"{r['hit_rate']:>6.1%} {r['roi']:>+7.1%} {r['avg_ev']:>+8.3f} "
+                    f"{r['profit_units']:>+8.1f}"
+                )
 
 
 # ── api ───────────────────────────────────────────────────────────────────────
