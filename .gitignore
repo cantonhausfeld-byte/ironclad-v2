@@ -13,6 +13,7 @@ data/bronze/
 data/silver/
 data/gold/
 data/models/
+data/models_bak/
 reports/
 .venv/
 venv/
