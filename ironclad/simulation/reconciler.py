@@ -10,8 +10,9 @@ from ironclad.simulation.player_draw import PlayerDrawResult, PlayerContext
 _RZ_TD_RATE = 0.57
 # Expected points per RZ trip: 0.57*7 + 0.43*3 ≈ 5.28
 _EXPECTED_PTS_PER_RZ_TRIP = _RZ_TD_RATE * 7.0 + (1.0 - _RZ_TD_RATE) * 3.0
-# League-average QB passing TD per completion (~29 TDs / 600 completions)
-_QB_TD_PER_COMPLETION = 0.048
+# League-average QB passing TD per completion (~30 TDs / 17 games / 22 comp/game ≈ 0.08;
+# starting QBs average ~2 passing TDs per game on ~22 completions → 0.09).
+_QB_TD_PER_COMPLETION = 0.09
 
 
 class Reconciler:
@@ -48,14 +49,15 @@ class Reconciler:
         players = [p for p in players]  # copy list
 
         # ── Yard + volume scaling ─────────────────────────────────────────────
+        # Scale rec_yards to match team totals; do NOT scale targets/receptions —
+        # those are drawn from NB distributions and scaling by the yards ratio
+        # would compress out the variance we intentionally added.
         total_rec = sum(p.rec_yards for p in players)
         if total_rec > 0:
             scale = team_pass_yards / total_rec
             scale = max(0.3, min(3.0, scale))
             for p in players:
                 p.rec_yards = max(0.0, p.rec_yards * scale)
-                p.targets = max(0, round(p.targets * scale))
-                p.receptions = max(0, min(p.targets, round(p.receptions * scale)))
 
         # QB pass_yards: drawn independently using calibrated NFL net yds/att (6.0).
         # Decoupled from total_rec_after so WR/TE scale and QB calibration are
@@ -68,13 +70,15 @@ class Reconciler:
                     float(rng.normal(p.pass_attempts * 6.0, p.pass_attempts * 1.8)),
                 )
 
+        # Scale rush_yards to match team totals; do NOT scale carries for the
+        # same reason as targets: NB carry counts have intentional variance that
+        # the yards-ratio scale would suppress.
         total_rush = sum(p.rush_yards for p in players)
         if total_rush > 0:
             scale = team_rush_yards / total_rush
             scale = max(0.3, min(3.0, scale))
             for p in players:
                 p.rush_yards = max(0.0, p.rush_yards * scale)
-                p.carries = max(0, round(p.carries * scale))
 
         # ── TD distribution ───────────────────────────────────────────────────
         # Sample red zone trips from Poisson, then each trip independently
@@ -94,8 +98,9 @@ class Reconciler:
             qb_pass_tds = 0
             qb_player = next((p for p in eligible if p.pass_attempts > 0), None)
             if qb_player is not None and qb_player.completions > 0:
-                raw = int(rng.binomial(qb_player.completions, _QB_TD_PER_COMPLETION))
-                qb_pass_tds = min(raw, team_tds)
+                # No clamp against team_tds: the QB's TD count should float
+                # freely to capture the observed 0-5 per-game variance.
+                qb_pass_tds = int(rng.binomial(qb_player.completions, _QB_TD_PER_COMPLETION))
                 qb_player.tds = qb_pass_tds
 
             # Remaining TDs (skill-position receiving + all rush TDs including QB)
