@@ -29,7 +29,10 @@ logger = logging.getLogger(__name__)
 _MARGIN_STD = 14.1
 _TOTAL_STD = 10.2
 
-# Feature columns used by the model (differences: home - away)
+# Feature columns used by the model (differences: home - away).
+# Odds features are intentionally excluded: the trained model predicts purely
+# from team quality so it can be compared against the market as a held-out
+# benchmark rather than graded against its own input.
 TEAM_FEATURES = [
     "off_epa_diff",
     "def_epa_diff",
@@ -56,15 +59,9 @@ TEAM_FEATURES = [
     "temp_f",
     "wind_mph",
     "precip_in",
-    "implied_total_from_odds",
-    "spread_from_odds",
-    "home_win_prob_from_odds",
 ]
 
-# Win-probability classifier omits home_win_prob_from_odds to avoid circular dependency.
-# XGBoost uses it as a near-perfect leaf feature, collapsing 75%+ of outputs to < 5% or > 95%.
-# Spread encodes the same directional signal without causing output saturation.
-CLF_FEATURES = [f for f in TEAM_FEATURES if f != "home_win_prob_from_odds"]
+CLF_FEATURES = TEAM_FEATURES
 
 
 def _sample_weights(X: pd.DataFrame, season_col: str = "home_season") -> np.ndarray | None:
@@ -166,22 +163,10 @@ class GameOutcomeModel(BaseModel):
         Xm_reg = Xf[reg_cols].fillna(0)
 
         raw_prob = float(self._clf.predict_proba(Xm_clf)[0, 1])
-        platt_prob = float(np.clip(self._calibrator.transform(np.array([raw_prob]))[0], 0.02, 0.98))
-
-        # Blend win prob 50/50 with Vegas-implied win prob when available.
-        # XGBoost remains overconfident at extreme spreads; anchoring to the market
-        # reduces systematic error for heavy favorites/underdogs.
-        vegas_win_prob = _col(X, "home_win_prob_from_odds", None)
-        if vegas_win_prob is not None:
-            home_win_prob = float(np.clip(0.5 * platt_prob + 0.5 * float(vegas_win_prob), 0.02, 0.98))
-        else:
-            home_win_prob = platt_prob
+        home_win_prob = float(np.clip(self._calibrator.transform(np.array([raw_prob]))[0], 0.02, 0.98))
 
         home_margin_mean = float(self._reg_margin.predict(Xm_reg)[0])
-        total_mean_model = float(self._reg_total.predict(Xm_reg)[0])
-        # Blend model total with Vegas-implied total (60/40).
-        vegas_total = _col(X, "implied_total_from_odds", total_mean_model)
-        total_mean = 0.4 * total_mean_model + 0.6 * vegas_total
+        total_mean = float(self._reg_total.predict(Xm_reg)[0])
 
         return {
             "home_win_prob": home_win_prob,

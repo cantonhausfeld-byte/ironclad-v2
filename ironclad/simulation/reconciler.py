@@ -10,6 +10,8 @@ from ironclad.simulation.player_draw import PlayerDrawResult, PlayerContext
 _RZ_TD_RATE = 0.57
 # Expected points per RZ trip: 0.57*7 + 0.43*3 ≈ 5.28
 _EXPECTED_PTS_PER_RZ_TRIP = _RZ_TD_RATE * 7.0 + (1.0 - _RZ_TD_RATE) * 3.0
+# League-average QB passing TD per completion (~29 TDs / 600 completions)
+_QB_TD_PER_COMPLETION = 0.048
 
 
 class Reconciler:
@@ -77,38 +79,48 @@ class Reconciler:
         # ── TD distribution ───────────────────────────────────────────────────
         # Sample red zone trips from Poisson, then each trip independently
         # scores a TD with probability _RZ_TD_RATE (vs field goal).
-        # This gives a joint (TDs, FGs) distribution instead of a deterministic
-        # "score minus a fixed FG offset" estimate.
         rz_trips = int(rng.poisson(max(0.5, team_score / _EXPECTED_PTS_PER_RZ_TRIP)))
         team_tds = int(rng.binomial(rz_trips, _RZ_TD_RATE))
 
         ctx_by_id = {c.player_id: c for c in contexts}
         eligible = [p for p in players if p.played and p.player_id in ctx_by_id]
 
-        if team_tds > 0 and eligible:
-            # Weight by usage: pass players use td_rate_per_target, rush use td_rate_per_carry
-            weights = []
-            for p in eligible:
-                ctx = ctx_by_id[p.player_id]
-                w = 0.0
-                if p.targets > 0 and ctx.td_rate_per_target:
-                    w += p.targets * ctx.td_rate_per_target
-                if p.carries > 0 and ctx.td_rate_per_carry:
-                    w += p.carries * ctx.td_rate_per_carry
-                if p.pass_attempts > 0 and ctx.td_rate_per_target:  # QB passing TDs
-                    w += p.pass_attempts * ctx.td_rate_per_target
-                weights.append(max(w, 0.01))
+        if eligible:
+            # QB passing TDs: drawn directly as Binomial(completions, rate) rather
+            # than through the team-TD multinomial.  The multinomial anchors tightly
+            # to team_score, producing 58-65% 80% coverage; the direct Binomial draw
+            # captures the observed per-game variance (0-5 TDs) independently.
+            # Clamped to team_tds so the team total stays consistent.
+            qb_pass_tds = 0
+            qb_player = next((p for p in eligible if p.pass_attempts > 0), None)
+            if qb_player is not None and qb_player.completions > 0:
+                raw = int(rng.binomial(qb_player.completions, _QB_TD_PER_COMPLETION))
+                qb_pass_tds = min(raw, team_tds)
+                qb_player.tds = qb_pass_tds
 
-            total_w = sum(weights)
-            probs = [w / total_w for w in weights]
+            # Remaining TDs (skill-position receiving + all rush TDs including QB)
+            # distributed via weighted multinomial.  Weights raised to ^1.5 to
+            # concentrate TDs on the highest-usage player, reducing the excessive
+            # per-player variance that was widening WR/TE/RB coverage to 87-94%.
+            remaining_tds = max(0, team_tds - qb_pass_tds)
+            if remaining_tds > 0:
+                weights = []
+                for p in eligible:
+                    ctx = ctx_by_id[p.player_id]
+                    w = 0.0
+                    if p.targets > 0 and ctx.td_rate_per_target:
+                        w += p.targets * ctx.td_rate_per_target
+                    if p.carries > 0 and ctx.td_rate_per_carry:
+                        w += p.carries * ctx.td_rate_per_carry
+                    weights.append(max(w ** 1.5, 0.001))
 
-            # Assign TDs by sampling
-            td_counts = {p.player_id: 0 for p in eligible}
-            td_indices = rng.choice(len(eligible), size=team_tds, p=probs, replace=True)
-            for idx in td_indices:
-                td_counts[eligible[idx].player_id] += 1
-
-            for p in players:
-                p.tds = td_counts.get(p.player_id, 0)
+                total_w = sum(weights)
+                probs = [w / total_w for w in weights]
+                td_counts = {p.player_id: 0 for p in eligible}
+                td_indices = rng.choice(len(eligible), size=remaining_tds, p=probs, replace=True)
+                for idx in td_indices:
+                    td_counts[eligible[idx].player_id] += 1
+                for p in players:
+                    p.tds += td_counts.get(p.player_id, 0)
 
         return players

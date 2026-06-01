@@ -89,7 +89,14 @@ class PlayerDraw:
             adj_yds_per_tgt = max(1.0, (ctx.yards_per_target or 8.0) * (1.0 + game_quality_factor * 0.25))
 
             lam = max(0.0, ctx.targets_projected * pass_scale)
-            targets = poisson_draw(rng, lam)
+            # Negative-binomial for targets: receiver target counts have high
+            # game-script variance (std ≈ 3-4 at mean 6); Poisson is too narrow.
+            # r=3 → var = lam*(1+lam/3), std ≈ 4.2 at lam=6.
+            if lam > 0:
+                r_tgt = 3
+                targets = int(rng.negative_binomial(r_tgt, r_tgt / (r_tgt + lam)))
+            else:
+                targets = 0
             receptions = 0
             rec_yards = 0.0
             for _ in range(targets):
@@ -109,7 +116,14 @@ class PlayerDraw:
         # ── Rushing ───────────────────────────────────────────────────────────
         if ctx.carries_projected > 0:
             lam = max(0.0, ctx.carries_projected * rush_scale)
-            carries = poisson_draw(rng, lam)
+            # Negative-binomial for carries: carry counts have high game-script
+            # variance (std ≈ 5-7 at mean 12); Poisson is too narrow.
+            # r=4 → var = lam*(1+lam/4), std ≈ 5.5 at lam=10.
+            if lam > 0:
+                r_car = 4
+                carries = int(rng.negative_binomial(r_car, r_car / (r_car + lam)))
+            else:
+                carries = 0
             rush_yards = 0.0
             for _ in range(carries):
                 yds = float(truncated_normal(
