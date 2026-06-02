@@ -14,6 +14,33 @@ from ironclad.store.writer import GoldWriter
 
 logger = logging.getLogger(__name__)
 
+# Static NFL division membership (current alignment, stable across 2002+).
+_NFL_DIVISIONS: dict[str, str] = {
+    # AFC East
+    "BUF": "AFC_E", "MIA": "AFC_E", "NE": "AFC_E",  "NYJ": "AFC_E",
+    # AFC North
+    "BAL": "AFC_N", "CIN": "AFC_N", "CLE": "AFC_N",  "PIT": "AFC_N",
+    # AFC South
+    "HOU": "AFC_S", "IND": "AFC_S", "JAX": "AFC_S",  "TEN": "AFC_S",
+    # AFC West
+    "DEN": "AFC_W", "KC":  "AFC_W", "LV":  "AFC_W",  "LAC": "AFC_W",
+    # NFC East
+    "DAL": "NFC_E", "NYG": "NFC_E", "PHI": "NFC_E",  "WAS": "NFC_E",
+    # NFC North
+    "CHI": "NFC_N", "DET": "NFC_N", "GB":  "NFC_N",  "MIN": "NFC_N",
+    # NFC South
+    "ATL": "NFC_S", "CAR": "NFC_S", "NO":  "NFC_S",  "TB":  "NFC_S",
+    # NFC West
+    "ARI": "NFC_W", "LAR": "NFC_W", "SEA": "NFC_W",  "SF":  "NFC_W",
+}
+
+
+def _is_divisional(home_team: str, away_team: str) -> bool:
+    """Return True if both teams are in the same NFL division."""
+    div_h = _NFL_DIVISIONS.get(home_team)
+    div_a = _NFL_DIVISIONS.get(away_team)
+    return bool(div_h and div_a and div_h == div_a)
+
 
 class TeamFeatureBuilder:
     def __init__(self, conn=None) -> None:
@@ -192,7 +219,7 @@ class TeamFeatureBuilder:
             "def_epa_per_play_std":   def_from_opp("epa_per_play",  "def_epa_per_play"),
             # Context
             "rest_days":              rest_days,
-            "is_divisional":          None,
+            "is_divisional":          _is_divisional(game["home_team"], game["away_team"]),
             "implied_total_from_odds": float(implied_total) if pd.notna(implied_total) else None,
             "spread_from_odds":       float(spread) if (is_home and pd.notna(spread)) else
                                       (-float(spread) if pd.notna(spread) else None),

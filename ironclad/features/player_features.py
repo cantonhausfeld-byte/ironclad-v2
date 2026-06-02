@@ -56,6 +56,17 @@ class PlayerFeatureBuilder:
             # Always supplement from roster to capture healthy players not on injury report
             players = _supplement_from_roster(players, team, season, week, snap)
 
+            # Warn when depth chart data is missing: usage model will fall back to
+            # share-based starter inference, which is less precise.
+            if not players.empty and "depth_team" in players.columns:
+                if players["depth_team"].isna().all():
+                    logger.warning(
+                        "No depth chart data for %s season=%d week=%d — "
+                        "starter detection will use historical share fallback. "
+                        "Run `ironclad backfill --season %d` to populate.",
+                        team, season, week, season,
+                    )
+
             opp_feats = team_feats[team_feats["team"] == opponent]
             own_feats = team_feats[team_feats["team"] == team]
 

@@ -6,7 +6,7 @@ import pytest
 
 from ironclad.models.team.game_outcome import GameOutcomeModel
 from ironclad.models.team.score_env import ScoreEnvironmentModel
-from ironclad.models.player.usage import PlayerUsageModel
+from ironclad.models.player.usage import PlayerUsageModel, _infer_starter
 from ironclad.models.player.efficiency import PlayerEfficiencyModel
 from ironclad.models.registry import ModelRegistry
 from ironclad.models.calibration import IsotonicCalibrator
@@ -66,6 +66,37 @@ def test_score_env_valid_ranges():
     assert 0.3 <= out["pass_rate_projected"] <= 0.85
     assert out["total_plays_projected"] > 0
     assert out["team_total_projected"] > 0
+
+
+# ── _infer_starter (depth-chart fallback) ─────────────────────────────────────
+
+def test_infer_starter_returns_false_when_depth_known():
+    # Real depth data takes precedence; inference is skipped.
+    assert _infer_starter(depth=1, carry_share=0.20, target_share=0.15) is False
+    assert _infer_starter(depth=3, carry_share=0.20, target_share=0.15) is False
+
+
+def test_infer_starter_high_share_is_starter():
+    assert _infer_starter(depth=None, carry_share=0.25, target_share=None) is True
+    assert _infer_starter(depth=None, carry_share=None, target_share=0.15) is True
+
+
+def test_infer_starter_low_share_is_not_starter():
+    assert _infer_starter(depth=None, carry_share=0.03, target_share=0.03) is False
+
+
+def test_infer_starter_no_data_is_not_starter():
+    assert _infer_starter(depth=None, carry_share=None, target_share=None) is False
+
+
+def test_player_usage_no_depth_chart_starter_gets_volume():
+    """Players with strong share history get volume even when depth_team is missing."""
+    m = PlayerUsageModel()
+    row = _player_row("WR")
+    row = row.copy()
+    row["depth_team"] = float("nan")
+    out = m.predict(row)
+    assert out["targets_projected"] > 0
 
 
 # ── PlayerUsageModel ──────────────────────────────────────────────────────────

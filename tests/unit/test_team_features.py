@@ -6,8 +6,26 @@ from datetime import datetime, timezone
 import pandas as pd
 import pytest
 
-from ironclad.features.team_features import _parse_kickoff
+from ironclad.features.team_features import _parse_kickoff, _is_divisional
 from ironclad.features.utils import safe_divide, completeness_score
+
+
+# ── _is_divisional ────────────────────────────────────────────────────────────
+
+def test_divisional_same_division():
+    assert _is_divisional("KC", "LV") is True   # AFC West
+    assert _is_divisional("BUF", "MIA") is True  # AFC East
+    assert _is_divisional("DAL", "PHI") is True  # NFC East
+
+
+def test_divisional_different_division():
+    assert _is_divisional("KC", "BAL") is False  # AFC West vs AFC North
+    assert _is_divisional("SF", "DAL") is False  # NFC West vs NFC East
+
+
+def test_divisional_unknown_team_returns_false():
+    assert _is_divisional("XX", "KC") is False
+    assert _is_divisional("KC", "XX") is False
 
 
 # ── _parse_kickoff ─────────────────────────────────────────────────────────────

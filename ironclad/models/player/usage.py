@@ -30,7 +30,8 @@ def _to_xgb(df: pd.DataFrame) -> pd.DataFrame:
 FEATURES = [
     "availability", "depth_team",
     "target_share_l4", "carry_share_l4", "air_yards_share_l4",
-    "route_rate_l4", "redzone_target_share_l4", "redzone_carry_share_l4",
+    # route_rate_l4 omitted: FTN charting data not consistently available (always NULL)
+    "redzone_target_share_l4", "redzone_carry_share_l4",
     "opp_def_pass_epa_l4", "opp_def_rush_epa_l4",
     "team_off_pass_rate_l4", "team_implied_total",
     "is_home",
@@ -120,9 +121,11 @@ class PlayerUsageModel(BaseModel):
         carry_share  = _col(X, "carry_share_l4",  None)
         target_share = _col(X, "target_share_l4", None)
         depth = _col(X, "depth_team", None)
-        has_history    = (carry_share  is not None and carry_share  > 0.005) or \
-                         (target_share is not None and target_share > 0.005)
-        starter_proxy  = depth is not None and depth <= 2
+        has_history   = (carry_share  is not None and carry_share  > 0.005) or \
+                        (target_share is not None and target_share > 0.005)
+        starter_proxy = (depth is not None and depth <= 2) or _infer_starter(
+            depth, carry_share, target_share
+        )
         if not has_history and not starter_proxy:
             carries = 0.0
             targets = 0.0
@@ -143,10 +146,13 @@ class PlayerUsageModel(BaseModel):
         target_share = _col(X, "target_share_l4", None)
         carry_share = _col(X, "carry_share_l4", None)
 
-        # Only grant position-prior volume to players with a known starter slot;
-        # fringe players with no share data get zero projected volume.
+        # Only grant position-prior volume to players with a known starter slot.
+        # When depth chart data is unavailable (depth_team=None), infer starter
+        # status from historical share — covers seasons where nfl_data_py lags.
         depth = _col(X, "depth_team", None)
-        starter_proxy = depth is not None and depth <= 2
+        starter_proxy = (depth is not None and depth <= 2) or _infer_starter(
+            depth, carry_share, target_share
+        )
 
         targets = (target_share * 32.0 * volume_scale) if target_share else (priors["targets"] * volume_scale if starter_proxy else 0.0)
         carries = (carry_share * 27.6 * volume_scale) if carry_share else (priors["carries"] * volume_scale if starter_proxy else 0.0)
@@ -158,6 +164,23 @@ class PlayerUsageModel(BaseModel):
             "pass_attempts_projected": max(0.0, float(pass_att)),
             "availability": availability,
         }
+
+
+def _infer_starter(
+    depth: float | None,
+    carry_share: float | None,
+    target_share: float | None,
+) -> bool:
+    """Infer starter status from historical share when depth_team is unavailable.
+
+    When nfl_data_py depth chart data lags (e.g. 2025 early season), treat
+    any player with genuine starter-level historical usage as depth_team ≤ 2.
+    Thresholds: WR/TE starter ≈ 10%+ target share; RB starter ≈ 15%+ carry share.
+    """
+    if depth is not None:
+        return False  # Real depth data takes precedence — no inference needed
+    return (target_share is not None and target_share > 0.08) or \
+           (carry_share  is not None and carry_share  > 0.12)
 
 
 def _col(X: pd.DataFrame, col: str, default):
