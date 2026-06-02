@@ -9,6 +9,7 @@ build/
 htmlcov/
 *.ddb
 *.ddb.wal
+*.ddb.*
 data/bronze/
 data/silver/
 data/gold/
