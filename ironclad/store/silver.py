@@ -25,16 +25,26 @@ class SilverTransformer:
         counts["team_game_stats"] = self._build_team_game_stats(seasons)
         counts["player_game_stats"] = self._build_player_game_stats(seasons)
         counts["player_weekly_status"] = self._build_player_weekly_status(seasons)
-        # Optional enrichment from external data sources
+        # Optional enrichment — PFR available from ~2016, FTN from 2022.
+        # Log at INFO on success; WARNING on failure so ops notices enrichment gaps.
         for season in (seasons or []):
             try:
                 self._enrich_with_pfr(season)
             except Exception as exc:
-                logger.debug("PFR pressure enrichment skipped for %d: %s", season, exc)
+                logger.warning(
+                    "PFR pressure enrichment skipped for season %d "
+                    "(sack_rate_allowed / pressure_rate columns will be NULL): %s",
+                    season, exc,
+                )
             try:
                 self._enrich_with_ftn(season)
             except Exception as exc:
-                logger.debug("FTN charting enrichment skipped for %d: %s", season, exc)
+                logger.warning(
+                    "FTN charting enrichment skipped for season %d "
+                    "(route_rate_l4 / pass_block_win_rate columns will be NULL — "
+                    "FTN data is available from 2022+): %s",
+                    season, exc,
+                )
         return counts
 
     # ── silver.games ──────────────────────────────────────────────────────────
@@ -358,7 +368,11 @@ class SilverTransformer:
                     df["position"] = df["position"].fillna(df["position_old"])
                     df = df.drop(columns=["position_old"])
         except Exception as exc:
-            logger.debug("Position enrichment from rosters failed: %s", exc)
+            logger.warning(
+                "Position enrichment from rosters failed — player positions will be UNK "
+                "(run `ironclad backfill --season <year>` to populate bronze.rosters): %s",
+                exc,
+            )
 
         if "position" not in df.columns:
             df["position"] = "UNK"
