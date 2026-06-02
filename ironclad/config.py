@@ -1,5 +1,10 @@
 """Central configuration: paths, constants, and environment."""
+from __future__ import annotations
+
+import json
+import logging
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -61,3 +66,50 @@ MIN_GAMES_FOR_ROLLING = 1  # start using rolling after this many games
 
 # ── Feature store version ──────────────────────────────────────────────────────
 FEATURE_VERSION = "v1.0"
+
+# ── Logging ────────────────────────────────────────────────────────────────────
+LOG_LEVEL = os.environ.get("IRONCLAD_LOG_LEVEL", "INFO").upper()
+LOG_FORMAT = os.environ.get("IRONCLAD_LOG_FORMAT", "text").lower()  # "text" | "json"
+
+
+class _JsonFormatter(logging.Formatter):
+    """Emit one JSON object per log record for structured log aggregation."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        payload = {
+            "ts":      datetime.now(tz=timezone.utc).isoformat(),
+            "level":   record.levelname,
+            "logger":  record.name,
+            "msg":     record.getMessage(),
+        }
+        if record.exc_info:
+            payload["exc"] = self.formatException(record.exc_info)
+        return json.dumps(payload)
+
+
+def setup_logging(level: str | None = None, fmt: str | None = None) -> None:
+    """Configure root logger. Call once at process startup (CLI entry point).
+
+    level: "DEBUG" | "INFO" | "WARNING" | "ERROR" (default: IRONCLAD_LOG_LEVEL env var)
+    fmt:   "text" | "json"                         (default: IRONCLAD_LOG_FORMAT env var)
+    """
+    effective_level = (level or LOG_LEVEL).upper()
+    effective_fmt = (fmt or LOG_FORMAT).lower()
+
+    root = logging.getLogger()
+    root.setLevel(effective_level)
+
+    # Remove any handlers added by earlier basicConfig calls
+    root.handlers.clear()
+
+    handler = logging.StreamHandler()
+    if effective_fmt == "json":
+        handler.setFormatter(_JsonFormatter())
+    else:
+        handler.setFormatter(
+            logging.Formatter(
+                fmt="%(asctime)s  %(levelname)-8s  %(message)s",
+                datefmt="%H:%M:%S",
+            )
+        )
+    root.addHandler(handler)

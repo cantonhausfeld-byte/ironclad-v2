@@ -1,19 +1,14 @@
 """ironclad CLI — unified NFL matchup forecasting system."""
 from __future__ import annotations
 
-import logging
 import sys
 from pathlib import Path
 
 import click
 
-from ironclad.config import DEFAULT_N_DRAWS, REPORTS_DIR
+from ironclad.config import DEFAULT_N_DRAWS, REPORTS_DIR, setup_logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s  %(levelname)-8s  %(message)s",
-    datefmt="%H:%M:%S",
-)
+setup_logging()
 
 
 @click.group()
