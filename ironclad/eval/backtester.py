@@ -47,6 +47,7 @@ class Backtester:
         """
         from ironclad.store.schema import create_all_tables
         create_all_tables(self._conn)
+        self._conn.execute("CHECKPOINT")
 
         if run_id is None:
             run_id = f"bt_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"

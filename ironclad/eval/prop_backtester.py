@@ -48,6 +48,7 @@ class PropBacktester:
         from ironclad.store.schema import create_all_tables
         self._conn = conn or get_connection()
         create_all_tables(self._conn)
+        self._conn.execute("CHECKPOINT")
 
     def run(
         self,
