@@ -70,6 +70,8 @@ class AutoRunWorkflow:
             try:
                 odds_rows = OddsIngestor(writer=writer, conn=conn).ingest()
                 logger.info("Odds ingest: %d rows", odds_rows)
+            except EnvironmentError:
+                raise  # missing ODDS_API_KEY is a config error, not transient
             except Exception as exc:
                 logger.warning("Odds fetch failed (continuing without props): %s", exc)
 

@@ -32,6 +32,13 @@ _PROP_MARKET_MAP: dict[str, str] = {
 _PROP_MARKETS_CSV = ",".join(_PROP_MARKET_MAP)
 
 
+def _log_quota(resp: "requests.Response") -> None:
+    remaining = resp.headers.get("x-requests-remaining")
+    used = resp.headers.get("x-requests-used")
+    if remaining is not None or used is not None:
+        logger.info("Odds API quota — used: %s, remaining: %s", used, remaining)
+
+
 class OddsIngestor(BaseIngestor):
     def __init__(self, writer: BronzeWriter | None = None, conn=None) -> None:
         self._writer = writer or BronzeWriter()
@@ -39,8 +46,11 @@ class OddsIngestor(BaseIngestor):
 
     def _ingest(self, game_ids: list[str] | None = None) -> int:
         if not ODDS_API_KEY:
-            logger.warning("ODDS_API_KEY not set; skipping odds ingest")
-            return 0
+            raise EnvironmentError(
+                "ODDS_API_KEY is not set. "
+                "Set it in .env or as an environment variable before running live odds ingest. "
+                "Get a free key at https://the-odds-api.com."
+            )
 
         # ── 1. Fetch game-level odds ──────────────────────────────────────────
         resp = requests.get(
@@ -54,6 +64,7 @@ class OddsIngestor(BaseIngestor):
             timeout=15,
         )
         resp.raise_for_status()
+        _log_quota(resp)
         events = resp.json()
 
         odds_rows: list[dict] = []
@@ -75,11 +86,10 @@ class OddsIngestor(BaseIngestor):
             odds_rows.extend(_parse_game_odds(event, game_id, home_full, away_full, ts))
 
             # ── 2. Fetch player props for this event ──────────────────────────
-            if ODDS_API_KEY:
-                props = _fetch_player_props(
-                    event_id, game_id, home_abbr, away_abbr, self._conn, ts
-                )
-                prop_rows.extend(props)
+            props = _fetch_player_props(
+                event_id, game_id, home_abbr, away_abbr, self._conn, ts
+            )
+            prop_rows.extend(props)
 
         total = 0
         if odds_rows:
