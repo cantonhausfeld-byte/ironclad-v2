@@ -24,12 +24,12 @@ _VIG_BREAKEVEN = 110 / 210  # ≈ 0.5238 — min win rate to profit at -110
 
 
 def _spread_to_prob(spread: float) -> float:
-    """Convert home spread (negative = home favored) to P(home wins outright).
+    """Convert home spread to P(home wins outright).
 
-    Uses a normal approximation for the margin distribution. The spread line
-    already bakes in home field, so a spread of 0 → 50%.
+    `spread` follows the silver.games convention: **positive = home favored**.
+    A +9.5 (home favored by 9.5) returns ≈ 0.75; 0 returns 0.5.
     """
-    return float(norm.cdf(-spread / _SPREAD_STD))
+    return float(norm.cdf(spread / _SPREAD_STD))
 
 
 def simulate_spread_bets(
@@ -65,8 +65,9 @@ def simulate_spread_bets(
         # Decide side and compute actual cover
         actual_margin = float(row["home_margin_actual"])
         vegas_spread = float(row["vegas_spread"])
-        # Home covers if actual margin beats the spread (spread is home handicap)
-        home_covers = actual_margin > -vegas_spread
+        # positive vegas_spread = home favored by that many points
+        # home covers when actual_margin > vegas_spread (home beats their handicap)
+        home_covers = actual_margin > vegas_spread
 
         if edge > 0:
             side = "home"

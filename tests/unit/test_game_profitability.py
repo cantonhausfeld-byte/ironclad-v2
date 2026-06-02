@@ -14,13 +14,14 @@ from ironclad.eval.profitability import (
 
 
 def _pred_row(**kw):
+    # vegas_spread uses silver.games convention: positive = home favored
     base = {
         "game_id": "2023_01_KC_BAL", "season": 2023, "week": 1,
         "home_team": "BAL", "away_team": "KC",
         "home_win_prob": 0.60, "home_win_prob_vegas": 0.55,
         "home_margin_pred": 3.5, "total_pred": 48.0,
         "home_win_actual": True, "home_margin_actual": 7.0,
-        "total_actual": 51.0, "vegas_spread": -3.0, "vegas_total": 46.5,
+        "total_actual": 51.0, "vegas_spread": 3.0, "vegas_total": 46.5,
     }
     base.update(kw)
     return base
@@ -33,8 +34,13 @@ def test_spread_to_prob_even():
 
 
 def test_spread_to_prob_home_favored():
-    # Negative spread (home favored) → prob > 0.5
-    assert _spread_to_prob(-3.0) > 0.5
+    # Positive spread (home favored, silver.games convention) → prob > 0.5
+    assert _spread_to_prob(3.0) > 0.5
+
+
+def test_spread_to_prob_home_underdog():
+    # Negative spread (home underdog) → prob < 0.5
+    assert _spread_to_prob(-3.0) < 0.5
 
 
 def test_american_to_decimal_minus110():
@@ -49,7 +55,8 @@ def test_american_to_decimal_plus120():
 # ── simulate_spread_bets ─────────────────────────────────────────────────────
 
 def test_spread_bets_places_bet_when_edge_exceeds_threshold():
-    df = pd.DataFrame([_pred_row(home_win_prob=0.65, vegas_spread=-3.0)])
+    # Home favored by 3 (spread=+3); model gives home 65% vs market ~58% → bet home
+    df = pd.DataFrame([_pred_row(home_win_prob=0.65, vegas_spread=3.0)])
     bets = simulate_spread_bets(df, min_edge=0.03)
     assert len(bets) == 1
     assert bets.iloc[0]["side"] == "home"
@@ -57,23 +64,24 @@ def test_spread_bets_places_bet_when_edge_exceeds_threshold():
 
 def test_spread_bets_skips_when_edge_below_threshold():
     # Model prob ≈ market prob → no edge
-    df = pd.DataFrame([_pred_row(home_win_prob=_spread_to_prob(-3.0), vegas_spread=-3.0)])
+    df = pd.DataFrame([_pred_row(home_win_prob=_spread_to_prob(3.0), vegas_spread=3.0)])
     bets = simulate_spread_bets(df, min_edge=0.03)
     assert len(bets) == 0
 
 
 def test_spread_bets_away_side():
-    # Model says away is significantly better
-    df = pd.DataFrame([_pred_row(home_win_prob=0.35, vegas_spread=-3.0)])
+    # Model says away is better despite home being slight favourite (spread=+3)
+    df = pd.DataFrame([_pred_row(home_win_prob=0.35, vegas_spread=3.0)])
     bets = simulate_spread_bets(df, min_edge=0.05)
     if len(bets) > 0:
         assert bets.iloc[0]["side"] == "away"
 
 
 def test_spread_bet_home_win_profit():
+    # Home favored by 3 (spread=+3); actual margin=7 → home covers (7 > 3)
     df = pd.DataFrame([_pred_row(
-        home_win_prob=0.65, vegas_spread=-3.0,
-        home_margin_actual=7.0,  # home covers (margin 7 > -(-3) = 3)
+        home_win_prob=0.65, vegas_spread=3.0,
+        home_margin_actual=7.0,
     )])
     bets = simulate_spread_bets(df, min_edge=0.03)
     assert len(bets) == 1
@@ -82,9 +90,10 @@ def test_spread_bet_home_win_profit():
 
 
 def test_spread_bet_home_loss():
+    # Home favored by 3 (spread=+3); actual margin=1 → home fails to cover (1 < 3, not > 3)
     df = pd.DataFrame([_pred_row(
-        home_win_prob=0.65, vegas_spread=-3.0,
-        home_margin_actual=1.0,  # home fails to cover (1 < 3)
+        home_win_prob=0.65, vegas_spread=3.0,
+        home_margin_actual=1.0,
     )])
     bets = simulate_spread_bets(df, min_edge=0.03)
     assert len(bets) == 1
