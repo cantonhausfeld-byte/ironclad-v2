@@ -107,11 +107,24 @@ class ResultsResponse(BaseModel):
     bets: list[dict[str, Any]]
 
 
+def _ro_conn():
+    """Read-only connection for API endpoints.
+
+    DuckDB allows many concurrent readers as long as no writer holds an
+    exclusive lock. Using read_only=True here lets batch jobs (backfill,
+    weekly, train) open a read-write connection in a separate process without
+    the API blocking them.
+    """
+    return get_connection(read_only=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     from ironclad.store.schema import create_all_tables
-    conn = get_connection()
-    create_all_tables(conn)
+    # Bootstrap schemas using a brief read-write connection, then close it so
+    # the batch process can acquire the writer lock unobstructed.
+    rw_conn = get_connection(read_only=False)
+    create_all_tables(rw_conn)
     logger.info("ironclad API started")
     yield
     logger.info("ironclad API stopped")
@@ -140,7 +153,7 @@ def get_games(
     week: int = Query(..., description="Week number"),
 ):
     """List games for a given season and week."""
-    conn = get_connection()
+    conn = _ro_conn()
     try:
         df = conn.execute(
             """
@@ -195,7 +208,7 @@ def simulate(req: SimulateRequest):
 @app.post("/api/v1/edges", response_model=EdgesResponse)
 def get_edges(req: EdgesRequest):
     """Compute +EV betting edges for a game using Monte Carlo simulation."""
-    conn = get_connection()
+    conn = _ro_conn()
 
     prop_lines = load_prop_lines_from_db(conn, req.game_id)
     if not prop_lines:
@@ -245,7 +258,7 @@ def get_results(
     season: int | None = Query(None, description="Filter to a specific season (not yet indexed)"),
 ):
     """Return P&L summary and settled bet history."""
-    conn = get_connection()
+    conn = _ro_conn()
     try:
         df = load_results(conn, game_id=game_id)
     except Exception as exc:
