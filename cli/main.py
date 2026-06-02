@@ -279,6 +279,76 @@ def evaluate(val_seasons) -> None:
         click.echo("No metrics available (run ironclad train first)")
 
 
+@cli.command()
+@click.option("--run-id", default=None, help="Backtest run ID to analyse (default: latest)")
+@click.option("--min-edge", default=0.03, show_default=True,
+              help="Min model-vs-market probability edge to place a spread bet (0.03 = 3%)")
+@click.option("--min-total-diff", default=1.5, show_default=True,
+              help="Min model-vs-Vegas total difference in points to place a total bet")
+def profitability(run_id, min_edge, min_total_diff) -> None:
+    """Simulate spread/total bets from backtest predictions and report ROI + CLV.
+
+    Reads gold.backtest_predictions (produced by `ironclad backtest`) and
+    simulates placing bets wherever the model disagrees with the Vegas line.
+    Settles at -110 juice. Reports ROI, hit-rate, and average model edge (a
+    proxy for CLV when true closing-line odds are unavailable).
+    """
+    from ironclad.eval.profitability import run_profitability_harness
+    from ironclad.store.connection import get_connection
+    from ironclad.store.schema import create_all_tables
+
+    conn = get_connection()
+    create_all_tables(conn)
+
+    try:
+        bets, summary = run_profitability_harness(
+            conn, run_id=run_id, min_edge=min_edge, min_total_diff=min_total_diff
+        )
+    except RuntimeError as exc:
+        click.echo(f"ERROR: {exc}", err=True)
+        sys.exit(1)
+
+    if summary.get("total_bets", 0) == 0 and not bets.empty:
+        pass
+    elif bets.empty:
+        click.echo(
+            "No bets placed. Run `ironclad backtest` first to generate predictions, "
+            "or lower --min-edge / --min-total-diff."
+        )
+        return
+
+    seasons = summary.get("seasons", [])
+    n_games = summary.get("n_games_in_backtest", "?")
+    click.echo(f"\nProfitability harness  |  seasons={seasons}  |  {n_games} games in backtest")
+    click.echo(f"Parameters: min_edge={min_edge:.0%}  min_total_diff={min_total_diff} pts")
+    click.echo("")
+
+    overall = summary.get("overall", {})
+    clv = summary.get("clv", {})
+    click.echo(f"{'Segment':<12} {'Bets':>5} {'Hit%':>7} {'ROI':>8} {'Profit':>8}")
+    click.echo("-" * 46)
+
+    def _row(label: str, s: dict) -> None:
+        if not s:
+            return
+        click.echo(
+            f"{label:<12} {s['n_bets']:>5d} {s['win_rate']:>6.1%} "
+            f"{s['roi']:>+7.1%} {s['profit']:>+8.2f}u"
+        )
+
+    _row("Overall", overall)
+    _row("Spread", summary.get("spread", {}))
+    _row("Total", summary.get("total", {}))
+    click.echo("")
+
+    if clv:
+        click.echo(f"CLV proxy (spread bets, n={clv.get('n_bets', '?')}):")
+        click.echo(f"  Mean edge:         {clv.get('mean_edge', 0):+.1%}")
+        click.echo(f"  Mean signed edge:  {clv.get('mean_signed_edge', 0):+.1%}  "
+                   f"(+ve = model picked right side)")
+    click.echo(f"\nBreakeven at -110:   {110/210:.1%}")
+
+
 def _parse_seasons(spec: str) -> list[int]:
     """Parse '2016-2022' or '2018,2019,2020' into a list of ints."""
     spec = spec.strip()

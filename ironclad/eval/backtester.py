@@ -183,13 +183,7 @@ class Backtester:
         raw_probs = model._clf.predict_proba(Xm_clf)[:, 1]
         platt_probs = np.clip(model._calibrator.transform(raw_probs), 0.02, 0.98)
         margin_preds = model._reg_margin.predict(Xm_reg)
-        total_preds_raw = model._reg_total.predict(Xm_reg)
-
-        # Pre-compute Vegas win probs for blending (row-wise below)
-        vegas_win_probs = np.array([
-            _fval(X_test.iloc[i], "home_home_win_prob_from_odds")
-            for i in range(len(X_test))
-        ])
+        total_preds = model._reg_total.predict(Xm_reg)
 
         now_ts = datetime.now(timezone.utc).isoformat()
         rows: list[dict] = []
@@ -197,23 +191,6 @@ class Backtester:
         for i in range(len(X_test)):
             xrow = X_test.iloc[i]
             yrow = y_test.iloc[i]
-
-            # Blend model win prob 50/50 with Vegas-implied win prob when available.
-            # XGBoost is still overconfident at extreme spreads; anchoring to the
-            # efficient market reduces systematic error for heavy favorites/underdogs.
-            vwp = vegas_win_probs[i]
-            model_wp = float(platt_probs[i])
-            if vwp is not None:
-                home_win_prob_final = np.clip(0.5 * model_wp + 0.5 * float(vwp), 0.02, 0.98)
-            else:
-                home_win_prob_final = model_wp
-
-            vegas_total = _fval(xrow, "home_implied_total_from_odds")
-            raw_total = float(total_preds_raw[i])
-            if vegas_total is not None:
-                blended_total = 0.4 * raw_total + 0.6 * vegas_total
-            else:
-                blended_total = raw_total
 
             rows.append({
                 "backtest_run_id":    run_id,
@@ -225,15 +202,15 @@ class Backtester:
                 "model_name":         model.name,
                 "model_version":      f"fold_{test_season}",
                 "predicted_at":       now_ts,
-                "home_win_prob":      round(home_win_prob_final, 4),
+                "home_win_prob":      round(float(platt_probs[i]), 4),
                 "home_win_prob_vegas": _fval(xrow, "home_home_win_prob_from_odds"),
                 "home_margin_pred":   round(float(margin_preds[i]), 2),
-                "total_pred":         round(blended_total, 2),
+                "total_pred":         round(float(total_preds[i]), 2),
                 "home_win_actual":    bool(yrow["home_win"]) if "home_win" in yrow.index else None,
                 "home_margin_actual": _ival(yrow, "home_margin"),
                 "total_actual":       _ival(yrow, "total_score"),
                 "vegas_spread":       _fval(xrow, "home_spread_from_odds"),
-                "vegas_total":        vegas_total,
+                "vegas_total":        _fval(xrow, "home_implied_total_from_odds"),
             })
 
         return rows
