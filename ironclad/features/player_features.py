@@ -8,6 +8,7 @@ import pandas as pd
 
 from ironclad.config import AVAILABILITY_DEFAULT, FEATURE_VERSION, ROLLING_WINDOW
 from ironclad.features.snapshot import FeatureSnapshot
+from ironclad.store.normalization import normalize_teams
 from ironclad.store.writer import GoldWriter
 
 logger = logging.getLogger(__name__)
@@ -291,6 +292,7 @@ def _supplement_from_roster(
 ) -> pd.DataFrame:
     """Add roster players not already in players (e.g. healthy starters absent from injury report)."""
     roster = snap.reader.read_table("bronze.rosters")
+    roster["team"] = normalize_teams(roster["team"])
     roster = roster[(roster["team"] == team) & (roster["season"] == season) & (roster["week"] <= week)]
     if roster.empty:
         return players

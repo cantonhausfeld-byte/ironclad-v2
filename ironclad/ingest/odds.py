@@ -41,8 +41,8 @@ def _log_quota(resp: "requests.Response") -> None:
 
 class OddsIngestor(BaseIngestor):
     def __init__(self, writer: BronzeWriter | None = None, conn=None) -> None:
-        self._writer = writer or BronzeWriter()
         self._conn = conn or get_connection()
+        self._writer = writer or BronzeWriter(conn=self._conn)
 
     def _ingest(self, game_ids: list[str] | None = None) -> int:
         if not ODDS_API_KEY:

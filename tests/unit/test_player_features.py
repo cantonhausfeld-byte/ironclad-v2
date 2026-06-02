@@ -138,3 +138,28 @@ def test_player_features_weather_populated_from_game():
     assert row["wind_mph"] == pytest.approx(12.5)
     assert row["is_dome"] == False
     assert row["altitude_ft"] == 5280
+
+
+# ── Team code normalization regression ───────────────────────────────────────
+
+def test_supplement_from_roster_normalizes_team_code():
+    """bronze.rosters may use 'LA' (Rams transition); roster lookup must normalize."""
+    from ironclad.features.player_features import _supplement_from_roster
+    from ironclad.features.snapshot import FeatureSnapshot
+    from datetime import timezone
+
+    conn = _conn()
+    cutoff = datetime(2099, 1, 1, tzinfo=timezone.utc)
+    snap = FeatureSnapshot(cutoff, conn)
+
+    conn.execute("""
+        INSERT INTO bronze.rosters
+            (season, week, player_id, player_name, team, position, _ingest_ts)
+        VALUES (2024, 1, 'P999', 'Test Ram', 'LA', 'WR',
+                '2024-01-01 00:00:00+00')
+    """)
+
+    # Query with normalized code 'LAR' — must find the 'LA'-coded roster entry
+    result = _supplement_from_roster(pd.DataFrame(), "LAR", 2024, 1, snap)
+    assert not result.empty, "Roster lookup with 'LA'→'LAR' normalization should find the player"
+    assert result.iloc[0]["team"] == "LAR"

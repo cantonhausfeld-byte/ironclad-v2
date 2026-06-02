@@ -425,6 +425,7 @@ class SilverTransformer:
         if df.empty:
             return 0
 
+        df["team"] = normalize_teams(df["team"])
         df["availability"] = df["injury_status"].map(AVAILABILITY_MAP).fillna(AVAILABILITY_DEFAULT)
 
         # Enrich with snap rate from bronze.snap_counts (nflverse)
