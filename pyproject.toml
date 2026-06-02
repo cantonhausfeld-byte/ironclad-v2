@@ -26,7 +26,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-cov>=4.0", "hypothesis>=6.0", "httpx>=0.24", "fastapi>=0.104", "uvicorn>=0.24"]
+dev = ["pytest>=8.0", "pytest-cov>=4.0", "hypothesis>=6.0", "httpx>=0.24", "fastapi>=0.104", "uvicorn>=0.24", "ruff>=0.4"]
 dashboard = ["streamlit>=1.30", "plotly>=5.0"]
 api = ["fastapi>=0.104", "uvicorn>=0.24"]
 
@@ -44,3 +44,11 @@ addopts = "-v --tb=short"
 [tool.coverage.run]
 source = ["ironclad"]
 omit = ["tests/*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]

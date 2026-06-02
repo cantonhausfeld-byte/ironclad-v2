@@ -7,16 +7,16 @@ import numpy as np
 import pandas as pd
 
 from ironclad.config import DEFAULT_N_DRAWS
-from ironclad.simulation.game_draw import GameDraw
-from ironclad.simulation.player_draw import PlayerDraw, PlayerContext, PlayerDrawResult
-from ironclad.simulation.reconciler import Reconciler
-from ironclad.simulation.results import SimulationResult, DrawRecord
+from ironclad.models.bias_corrector import TeamBiasCorrector
+from ironclad.models.player.efficiency import PlayerEfficiencyModel
+from ironclad.models.player.usage import PlayerUsageModel
+from ironclad.models.registry import ModelRegistry
 from ironclad.models.team.game_outcome import GameOutcomeModel
 from ironclad.models.team.score_env import ScoreEnvironmentModel
-from ironclad.models.player.usage import PlayerUsageModel
-from ironclad.models.player.efficiency import PlayerEfficiencyModel
-from ironclad.models.bias_corrector import TeamBiasCorrector
-from ironclad.models.registry import ModelRegistry
+from ironclad.simulation.game_draw import GameDraw
+from ironclad.simulation.player_draw import PlayerContext, PlayerDraw, PlayerDrawResult
+from ironclad.simulation.reconciler import Reconciler
+from ironclad.simulation.results import DrawRecord, SimulationResult
 
 logger = logging.getLogger(__name__)
 

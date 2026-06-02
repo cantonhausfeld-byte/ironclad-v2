@@ -4,18 +4,21 @@ from __future__ import annotations
 import logging
 
 import numpy as np
+import optuna
 import pandas as pd
 from lightgbm import LGBMClassifier, LGBMRegressor
 from sklearn.metrics import log_loss
 from sklearn.model_selection import TimeSeriesSplit
 
-import optuna
-
-from ironclad.config import LEAGUE_HOME_WIN_PROB, LEAGUE_AVG_TOTAL, LEAGUE_AVG_HOME_MARGIN
+from ironclad.config import LEAGUE_AVG_HOME_MARGIN, LEAGUE_AVG_TOTAL, LEAGUE_HOME_WIN_PROB
 from ironclad.models.base import BaseModel
 from ironclad.models.calibration import PlattCalibrator
 from ironclad.models.team.game_outcome import (
-    CLF_FEATURES, TEAM_FEATURES, _build_diff_features, _col, _sample_weights,
+    CLF_FEATURES,
+    TEAM_FEATURES,
+    _build_diff_features,
+    _col,
+    _sample_weights,
 )
 
 optuna.logging.set_verbosity(optuna.logging.WARNING)

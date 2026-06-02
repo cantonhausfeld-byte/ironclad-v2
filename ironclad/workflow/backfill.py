@@ -3,14 +3,14 @@ from __future__ import annotations
 
 import logging
 
+from ironclad.features.player_features import PlayerFeatureBuilder
+from ironclad.features.team_features import TeamFeatureBuilder
 from ironclad.ingest.pipeline import IngestPipeline
+from ironclad.store.connection import get_connection
+from ironclad.store.data_quality import log_quality_report
+from ironclad.store.schema import create_all_tables
 from ironclad.store.silver import SilverTransformer
 from ironclad.store.targets import TargetBackfiller
-from ironclad.features.team_features import TeamFeatureBuilder
-from ironclad.features.player_features import PlayerFeatureBuilder
-from ironclad.store.connection import get_connection
-from ironclad.store.schema import create_all_tables
-from ironclad.store.data_quality import log_quality_report
 
 logger = logging.getLogger(__name__)
 
@@ -52,9 +52,10 @@ class BackfillWorkflow:
                     ", ".join(str(s) for s in seasons)
                 )
             ).df()
-            from ironclad.features.team_features import _parse_kickoff
             from datetime import timedelta
+
             from ironclad.config import KNOWLEDGE_CUTOFF_MARGIN_MINUTES
+            from ironclad.features.team_features import _parse_kickoff
             for _, g in games.iterrows():
                 try:
                     cutoff = _parse_kickoff(g["gameday"], g.get("gametime_local")) - timedelta(minutes=KNOWLEDGE_CUTOFF_MARGIN_MINUTES)

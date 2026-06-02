@@ -1,8 +1,8 @@
 """Base ingestor with retry logic and column-safety helpers."""
 from __future__ import annotations
 
-import time
 import logging
+import time
 from abc import ABC, abstractmethod
 
 import pandas as pd

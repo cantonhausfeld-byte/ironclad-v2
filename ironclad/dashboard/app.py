@@ -1,14 +1,13 @@
 """Streamlit betting intelligence dashboard for ironclad-v2."""
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from ironclad.store.connection import get_connection
 from ironclad.eval import metrics as m
+from ironclad.store.connection import get_connection
 
 # ── Page config ───────────────────────────────────────────────────────────────
 

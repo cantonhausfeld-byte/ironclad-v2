@@ -16,7 +16,7 @@ def print_dashboard(predictions_df: pd.DataFrame) -> None:
     seasons = sorted(predictions_df["season"].unique())
 
     print(f"\n{'='*60}")
-    print(f"  ironclad-v2 Backtest Dashboard")
+    print("  ironclad-v2 Backtest Dashboard")
     print(f"  Run: {run_id}")
     print(f"  Seasons tested: {seasons[0]}–{seasons[-1]}")
     print(f"{'='*60}\n")

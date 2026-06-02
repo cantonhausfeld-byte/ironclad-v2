@@ -3,10 +3,10 @@ from __future__ import annotations
 
 import logging
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 
-from ironclad.config import AVAILABILITY_MAP, AVAILABILITY_DEFAULT
+from ironclad.config import AVAILABILITY_DEFAULT, AVAILABILITY_MAP
 from ironclad.store.connection import get_connection
 from ironclad.store.normalization import normalize_teams
 from ironclad.store.writer import SilverWriter

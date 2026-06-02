@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ironclad.betting.ev import american_to_prob
-from ironclad.betting.props import _OU_STATS, _ANYTIME_TD
+from ironclad.betting.props import _ANYTIME_TD, _OU_STATS
 from ironclad.simulation.results import SimulationResult
 
 logger = logging.getLogger(__name__)

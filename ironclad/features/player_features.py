@@ -5,11 +5,9 @@ import logging
 from datetime import datetime
 
 import pandas as pd
-import numpy as np
 
-from ironclad.config import FEATURE_VERSION, ROLLING_WINDOW, AVAILABILITY_DEFAULT
+from ironclad.config import AVAILABILITY_DEFAULT, FEATURE_VERSION, ROLLING_WINDOW
 from ironclad.features.snapshot import FeatureSnapshot
-from ironclad.features.utils import safe_divide, completeness_score
 from ironclad.store.writer import GoldWriter
 
 logger = logging.getLogger(__name__)

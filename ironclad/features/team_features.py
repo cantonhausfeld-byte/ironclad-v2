@@ -5,11 +5,10 @@ import logging
 from datetime import datetime, timedelta, timezone
 
 import pandas as pd
-import numpy as np
 
-from ironclad.config import LEAGUE_PRIORS, FEATURE_VERSION, ROLLING_WINDOW
+from ironclad.config import FEATURE_VERSION, LEAGUE_PRIORS, ROLLING_WINDOW
 from ironclad.features.snapshot import FeatureSnapshot
-from ironclad.features.utils import safe_divide, completeness_score
+from ironclad.features.utils import safe_divide
 from ironclad.store.writer import GoldWriter
 
 logger = logging.getLogger(__name__)

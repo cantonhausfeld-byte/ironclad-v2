@@ -3,8 +3,6 @@ from __future__ import annotations
 
 import logging
 
-import pandas as pd
-
 from ironclad.store.connection import get_connection
 
 logger = logging.getLogger(__name__)

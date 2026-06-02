@@ -6,13 +6,13 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from sklearn.metrics import log_loss, brier_score_loss, mean_absolute_error
+from sklearn.metrics import brier_score_loss, log_loss, mean_absolute_error
 
+from ironclad.models.player.efficiency import PlayerEfficiencyModel
+from ironclad.models.player.usage import PlayerUsageModel
 from ironclad.models.registry import ModelRegistry
 from ironclad.models.team.game_outcome import GameOutcomeModel
 from ironclad.models.team.score_env import ScoreEnvironmentModel
-from ironclad.models.player.usage import PlayerUsageModel
-from ironclad.models.player.efficiency import PlayerEfficiencyModel
 from ironclad.store.connection import get_connection
 
 logger = logging.getLogger(__name__)
@@ -95,7 +95,6 @@ class ModelTrainer:
         if "target_targets" in y.columns:
             mask = y["target_targets"].notna()
             if mask.sum() > 0:
-                feat_cols = [c for c in model._regs.get("WR", {}).keys()]
                 metrics["mae_targets"] = _safe_mae(y["target_targets"][mask], 4.5)  # baseline
         self._registry.save(model, metrics)
         logger.info("PlayerUsageModel saved.")
@@ -247,7 +246,11 @@ class ModelTrainer:
         X_val: pd.DataFrame,
         y_val: pd.DataFrame,
     ) -> dict:
-        from ironclad.models.team.game_outcome import _build_diff_features, TEAM_FEATURES, CLF_FEATURES
+        from ironclad.models.team.game_outcome import (
+            CLF_FEATURES,
+            TEAM_FEATURES,
+            _build_diff_features,
+        )
         Xf = _build_diff_features(X_val)
         clf_cols = [c for c in CLF_FEATURES if c in Xf.columns]
         reg_cols = [c for c in TEAM_FEATURES if c in Xf.columns]

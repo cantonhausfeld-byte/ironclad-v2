@@ -11,9 +11,11 @@ import pandas as pd
 
 from ironclad.betting.ev import (
     american_to_prob,
-    edge as ev_edge,
     expected_value,
     no_vig_prob,
+)
+from ironclad.betting.ev import (
+    edge as ev_edge,
 )
 from ironclad.betting.kelly import fractional_kelly
 from ironclad.simulation.results import SimulationResult

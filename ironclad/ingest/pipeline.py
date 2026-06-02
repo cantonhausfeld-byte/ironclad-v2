@@ -3,17 +3,17 @@ from __future__ import annotations
 
 import logging
 
-from ironclad.ingest.ftn_charting import FTNChartingIngestor
-from ironclad.ingest.pfr_pressure import PFRPressureIngestor
-from ironclad.ingest.player_ids import PlayerIDIngestor
-from ironclad.ingest.schedules import ScheduleIngestor
-from ironclad.ingest.play_by_play import PBPIngestor
-from ironclad.ingest.rosters import RosterIngestor
-from ironclad.ingest.injuries import InjuryIngestor
 from ironclad.ingest.depth_charts import DepthChartIngestor
-from ironclad.ingest.snap_counts import SnapCountIngestor
+from ironclad.ingest.ftn_charting import FTNChartingIngestor
+from ironclad.ingest.injuries import InjuryIngestor
+from ironclad.ingest.ngs_stats import NGSPassingIngestor, NGSReceivingIngestor, NGSRushingIngestor
+from ironclad.ingest.pfr_pressure import PFRPressureIngestor
+from ironclad.ingest.play_by_play import PBPIngestor
+from ironclad.ingest.player_ids import PlayerIDIngestor
 from ironclad.ingest.player_stats import PlayerStatsIngestor
-from ironclad.ingest.ngs_stats import NGSReceivingIngestor, NGSPassingIngestor, NGSRushingIngestor
+from ironclad.ingest.rosters import RosterIngestor
+from ironclad.ingest.schedules import ScheduleIngestor
+from ironclad.ingest.snap_counts import SnapCountIngestor
 from ironclad.ingest.stadiums import StadiumIngestor
 from ironclad.ingest.weather import WeatherIngestor
 from ironclad.store.connection import get_connection

@@ -9,10 +9,10 @@ from ironclad.features.player_features import PlayerFeatureBuilder
 from ironclad.features.team_features import TeamFeatureBuilder, _parse_kickoff
 from ironclad.ingest.pipeline import IngestPipeline
 from ironclad.store.connection import get_connection
+from ironclad.store.data_quality import log_quality_report
 from ironclad.store.schema import create_all_tables
 from ironclad.store.silver import SilverTransformer
 from ironclad.store.targets import TargetBackfiller
-from ironclad.store.data_quality import log_quality_report
 
 logger = logging.getLogger(__name__)
 

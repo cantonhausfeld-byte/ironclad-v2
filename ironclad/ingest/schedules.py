@@ -7,8 +7,8 @@ import nfl_data_py as nfl
 import pandas as pd
 
 from ironclad.ingest.base import BaseIngestor
-from ironclad.store.writer import BronzeWriter
 from ironclad.store.normalization import normalize_teams
+from ironclad.store.writer import BronzeWriter
 
 logger = logging.getLogger(__name__)
 

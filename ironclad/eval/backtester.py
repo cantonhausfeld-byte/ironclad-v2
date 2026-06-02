@@ -8,7 +8,12 @@ from datetime import datetime, timezone
 import numpy as np
 import pandas as pd
 
-from ironclad.models.team.game_outcome import CLF_FEATURES, GameOutcomeModel, _build_diff_features, TEAM_FEATURES
+from ironclad.models.team.game_outcome import (
+    CLF_FEATURES,
+    TEAM_FEATURES,
+    GameOutcomeModel,
+    _build_diff_features,
+)
 from ironclad.models.trainer import ModelTrainer
 from ironclad.store.connection import get_connection
 

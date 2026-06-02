@@ -7,7 +7,7 @@ from pathlib import Path
 
 import click
 
-from ironclad.config import REPORTS_DIR, DEFAULT_N_DRAWS
+from ironclad.config import DEFAULT_N_DRAWS, REPORTS_DIR
 
 logging.basicConfig(
     level=logging.INFO,
@@ -206,7 +206,7 @@ def backtest(train_start, test_seasons, run_id, model_name) -> None:
     test_list = _parse_seasons(test_seasons)
     if not test_list:
         click.echo("ERROR: Could not parse --test-seasons", err=True)
-        import sys; sys.exit(1)
+        sys.exit(1)
 
     click.echo(f"Walk-forward backtest | train_start={train_start} | test={test_list} | model={model_name}")
     click.echo("Training a fresh model for each fold — this may take several minutes...")
@@ -469,9 +469,12 @@ def edges(game_id, props_file, n_draws, kelly_fraction, min_ev, backfill_if_miss
 @click.option("--backfill-if-missing", is_flag=True, default=False)
 def parlay(game_id, legs_file, n_draws, backfill_if_missing) -> None:
     """Price a same-game parlay using the Monte Carlo joint distribution."""
-    from ironclad.betting.parlays import load_parlay_legs, parlay_probability, market_independence_prob
-    from ironclad.betting.ev import prob_to_american, american_to_prob
-    from ironclad.betting.props import PropAnalyzer
+    from ironclad.betting.ev import american_to_prob, prob_to_american
+    from ironclad.betting.parlays import (
+        load_parlay_legs,
+        market_independence_prob,
+        parlay_probability,
+    )
     from ironclad.workflow.matchup import MatchupWorkflow
 
     legs = load_parlay_legs(Path(legs_file))
@@ -485,8 +488,6 @@ def parlay(game_id, legs_file, n_draws, backfill_if_missing) -> None:
     )
 
     # Per-leg individual model probabilities
-    from ironclad.betting.props import PropLine
-    from ironclad.simulation.results import SimulationResult
     player_df = result._player_df
 
     click.echo(f"\nParlay: {len(legs)}-leg SGP for {game_id}  (n={n_draws} draws)\n")
@@ -632,8 +633,8 @@ def status() -> None:
 def validate(season: int, strict: bool) -> None:
     """Run data quality checks for a season."""
     from ironclad.store.connection import get_connection
-    from ironclad.store.schema import create_all_tables
     from ironclad.store.data_quality import run_all_checks
+    from ironclad.store.schema import create_all_tables
 
     conn = get_connection()
     create_all_tables(conn)

@@ -4,8 +4,8 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-import requests
 import pandas as pd
+import requests
 
 from ironclad.config import ODDS_API_KEY
 from ironclad.ingest.base import BaseIngestor

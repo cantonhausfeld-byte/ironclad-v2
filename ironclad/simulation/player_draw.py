@@ -1,14 +1,14 @@
 """Single player Monte Carlo draw within a game realization."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 
 from ironclad.simulation.distributions import (
-    truncated_normal,
-    poisson_draw,
     bernoulli,
+    poisson_draw,
+    truncated_normal,
 )
 
 

@@ -1,6 +1,8 @@
 """DuckDB connection factory."""
 import threading
+
 import duckdb
+
 from ironclad.config import DB_PATH
 
 _local = threading.local()

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -12,13 +12,14 @@ from ironclad.config import (
     KNOWLEDGE_CUTOFF_MARGIN_MINUTES,
     REPORTS_DIR,
 )
-from ironclad.features.team_features import TeamFeatureBuilder, _parse_kickoff
 from ironclad.features.player_features import PlayerFeatureBuilder
-from ironclad.simulation.engine import MonteCarloEngine
+from ironclad.features.team_features import TeamFeatureBuilder, _parse_kickoff
 from ironclad.report.builder import build_report_context
-from ironclad.report.markdown_renderer import render_markdown
-from ironclad.report.html_renderer import render_html
 from ironclad.report.csv_exporter import export_player_csv, export_team_csv
+from ironclad.report.html_renderer import render_html
+from ironclad.report.markdown_renderer import render_markdown
+from ironclad.simulation.engine import MonteCarloEngine
+from ironclad.simulation.results import SimulationResult
 from ironclad.store.connection import get_connection
 from ironclad.store.schema import create_all_tables
 
@@ -74,7 +75,7 @@ class MatchupWorkflow:
         self,
         game_id: str,
         backfill_if_missing: bool = False,
-    ) -> tuple["SimulationResult", dict, datetime, pd.DataFrame]:  # type: ignore[name-defined]
+    ) -> tuple[SimulationResult, dict, datetime, pd.DataFrame]:
         """Run feature builds + simulation for a game; return result + metadata.
 
         Used by run() for report generation and by `ironclad edges` for prop EV.

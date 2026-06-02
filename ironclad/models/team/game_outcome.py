@@ -7,21 +7,18 @@ Two implementations:
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 import numpy as np
 import pandas as pd
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier, XGBRegressor
 
 from ironclad.config import (
-    LEAGUE_HOME_WIN_PROB,
-    LEAGUE_AVG_TOTAL,
     LEAGUE_AVG_HOME_MARGIN,
+    LEAGUE_AVG_TOTAL,
+    LEAGUE_HOME_WIN_PROB,
 )
 from ironclad.models.base import BaseModel
-from ironclad.models.calibration import IsotonicCalibrator, PlattCalibrator
+from ironclad.models.calibration import PlattCalibrator
 
 logger = logging.getLogger(__name__)
 

@@ -4,8 +4,8 @@ from __future__ import annotations
 import logging
 from datetime import date, datetime, timezone
 
-import requests
 import pandas as pd
+import requests
 
 from ironclad.ingest.base import BaseIngestor
 from ironclad.store.writer import BronzeWriter

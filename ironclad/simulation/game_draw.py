@@ -1,11 +1,11 @@
 """Single game-level Monte Carlo draw."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 
-from ironclad.simulation.distributions import truncated_normal, beta_from_mean_std
+from ironclad.simulation.distributions import beta_from_mean_std, truncated_normal
 
 
 @dataclass

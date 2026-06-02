@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 
 from ironclad.simulation.game_draw import GameDrawResult
-from ironclad.simulation.player_draw import PlayerDrawResult, PlayerContext
+from ironclad.simulation.player_draw import PlayerContext, PlayerDrawResult
 
 # League-average red zone TD conversion rate (~57% of RZ trips end in TD).
 _RZ_TD_RATE = 0.57
