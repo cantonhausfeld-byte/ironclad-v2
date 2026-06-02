@@ -1,12 +1,21 @@
 """Tests for odds ingestor game_id fix, player prop parsing, and load_prop_lines_from_db."""
 from __future__ import annotations
 
-import pandas as pd
 import pytest
 
+from ironclad.betting.props import PropLine, load_prop_lines_from_db
+from ironclad.ingest.odds import _parse_game_odds, _resolve_game_id, _resolve_player
 from ironclad.store.normalization import full_name_to_abbr
-from ironclad.ingest.odds import _resolve_game_id, _resolve_player, _parse_game_odds
-from ironclad.betting.props import load_prop_lines_from_db, PropLine
+
+
+# ── OddsIngestor key guard ────────────────────────────────────────────────────
+
+def test_odds_ingestor_raises_without_key(monkeypatch, conn):
+    import ironclad.ingest.odds as odds_mod
+    monkeypatch.setattr(odds_mod, "ODDS_API_KEY", "")
+    from ironclad.ingest.odds import OddsIngestor
+    with pytest.raises(EnvironmentError, match="ODDS_API_KEY"):
+        OddsIngestor(conn=conn)._ingest()
 
 
 # ── full_name_to_abbr ─────────────────────────────────────────────────────────
