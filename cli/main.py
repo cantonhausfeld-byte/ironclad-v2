@@ -662,16 +662,24 @@ def results(game_id) -> None:
 # ── status ─────────────────────────────────────────────────────────────────────
 
 @cli.command()
-def status() -> None:
-    """Show data and model health summary."""
+@click.option("--check-odds-quota", is_flag=True, default=False,
+              help="Make a live API call to show remaining Odds API quota")
+def status(check_odds_quota: bool) -> None:
+    """Show data, model, and scheduler health summary."""
+    import json
+    from datetime import date
+    from pathlib import Path
+
+    click.echo("\n=== ironclad-v2 status ===\n")
+
+    # ── Data store ────────────────────────────────────────────────────────────
     try:
         from ironclad.store.connection import get_connection
         from ironclad.store.schema import create_all_tables
         conn = get_connection()
         create_all_tables(conn)
 
-        click.echo("\n=== ironclad-v2 status ===\n")
-
+        click.echo(click.style("Data store", bold=True))
         for table in [
             "bronze.schedules", "bronze.play_by_play", "bronze.rosters",
             "bronze.snap_counts", "bronze.player_stats_weekly",
@@ -680,13 +688,109 @@ def status() -> None:
         ]:
             try:
                 n = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
-                click.echo(f"  {table:<40} {n:>8,} rows")
+                flag = click.style("  ← 0 rows", fg="yellow") if n == 0 else ""
+                click.echo(f"  {table:<40} {n:>8,} rows{flag}")
             except Exception:
-                click.echo(f"  {table:<40}  (not found)")
+                click.echo(f"  {table:<40}  " + click.style("(not found)", fg="yellow"))
+
+        # Last backfill timestamp
+        try:
+            ts = conn.execute(
+                "SELECT MAX(_ingest_ts) FROM bronze.schedules"
+            ).fetchone()[0]
+            if ts:
+                click.echo(f"\n  Last backfill ingest:  {str(ts)[:19]}")
+        except Exception:
+            pass
 
         click.echo()
+
+        # ── Upcoming games ────────────────────────────────────────────────────
+        try:
+            rows = conn.execute("""
+                SELECT season, week, gameday, home_team, away_team
+                FROM bronze.schedules
+                WHERE gameday >= CURRENT_DATE AND season_type = 'REG'
+                ORDER BY gameday ASC LIMIT 5
+            """).fetchall()
+            click.echo(click.style("Upcoming games (next 5)", bold=True))
+            if rows:
+                for r in rows:
+                    click.echo(f"  {r[3]} vs {r[4]:<6}  {r[2]}  (season {r[0]}, week {r[1]})")
+            else:
+                click.echo("  " + click.style("No upcoming REG-season games found", fg="yellow"))
+            click.echo()
+        except Exception as exc:
+            click.echo(f"  Could not fetch upcoming games: {exc}\n")
+
     except Exception as exc:
-        click.echo(f"Status check failed: {exc}", err=True)
+        click.echo(click.style(f"Data store unavailable: {exc}", fg="red"), err=True)
+        click.echo()
+
+    # ── Models ────────────────────────────────────────────────────────────────
+    click.echo(click.style("Models", bold=True))
+    try:
+        from ironclad.models.registry import ModelRegistry
+        reg = ModelRegistry()
+        for model_name in ["game_outcome", "score_env", "player_usage", "player_efficiency"]:
+            try:
+                meta = reg.metadata(model_name)
+                if meta:
+                    saved = meta.get("saved_at", "unknown")[:19]
+                    ver = meta.get("version", "?")
+                    click.echo(f"  {model_name:<25} v{ver}  trained {saved}")
+                else:
+                    click.echo(f"  {model_name:<25} " + click.style("stub (not trained)", fg="yellow"))
+            except FileNotFoundError:
+                click.echo(f"  {model_name:<25} " + click.style("stub (not trained)", fg="yellow"))
+            except Exception as exc:
+                click.echo(f"  {model_name:<25} error: {exc}")
+    except Exception as exc:
+        click.echo(f"  Could not load model registry: {exc}")
+    click.echo()
+
+    # ── Scheduler state ───────────────────────────────────────────────────────
+    click.echo(click.style("Scheduler state", bold=True))
+    state_file = Path(__file__).parent.parent / "data" / "scheduler_state.json"
+    try:
+        if state_file.exists():
+            state = json.loads(state_file.read_text())
+            if state:
+                for key, val in sorted(state.items()):
+                    click.echo(f"  {key:<35} {val}")
+            else:
+                click.echo("  (no jobs have run yet)")
+        else:
+            click.echo("  (state file not found — scheduler has not run)")
+    except Exception as exc:
+        click.echo(f"  Could not read scheduler state: {exc}")
+    click.echo()
+
+    # ── Odds API ──────────────────────────────────────────────────────────────
+    click.echo(click.style("Odds API", bold=True))
+    from ironclad.config import ODDS_API_KEY
+    if not ODDS_API_KEY:
+        click.echo("  " + click.style("ODDS_API_KEY not set — live odds disabled", fg="yellow"))
+    else:
+        masked = ODDS_API_KEY[:4] + "****" + ODDS_API_KEY[-4:]
+        click.echo(f"  Key configured: {masked}")
+        if check_odds_quota:
+            try:
+                import requests
+                resp = requests.get(
+                    "https://api.the-odds-api.com/v4/sports",
+                    params={"apiKey": ODDS_API_KEY},
+                    timeout=10,
+                )
+                resp.raise_for_status()
+                used = resp.headers.get("x-requests-used", "?")
+                remaining = resp.headers.get("x-requests-remaining", "?")
+                click.echo(f"  Quota — used: {used}, remaining: {remaining}")
+            except Exception as exc:
+                click.echo(f"  Could not check quota: {exc}")
+        else:
+            click.echo("  Run with --check-odds-quota to verify remaining quota")
+    click.echo()
 
 
 # ── validate ─────────────────────────────────────────────────────────────────

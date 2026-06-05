@@ -1,8 +1,9 @@
 """Weekly automation scheduler for ironclad.
 
-Runs two distinct jobs on a weekly cycle:
+Runs three distinct jobs on a weekly/annual cycle:
   - PRE-GAME (Wednesday 10am): odds refresh, simulate, save edges
   - POST-GAME (Tuesday 6am):   backfill new PBP/stats, rebuild targets, validate
+  - END-OF-SEASON (February ≥10th): full season backfill + retrain all 4 models
 
 The scheduler uses a persistent state file to avoid running the same job twice
 in the same week. It is designed to be long-running (started once via cron or
@@ -30,6 +31,9 @@ _POST_GAME_HOUR = 6   # Tuesday 6 am
 
 # How often the scheduler wakes to check (seconds)
 _POLL_INTERVAL_SECONDS = 60 * 15  # 15 minutes
+
+# End-of-season retrain fires in February on or after this day
+_RETRAIN_DAY = 10  # Feb 10 — Super Bowl is always before this
 
 
 # ── State persistence ─────────────────────────────────────────────────────────
@@ -88,6 +92,21 @@ def run_post_game(season: int, n_draws: int = 5000) -> dict:
     log_quality_report(conn, season)
     logger.info("Post-game backfill complete: %s", result)
     return result
+
+
+def run_end_of_season_retrain(season: int) -> dict:
+    """February job: full-season backfill then retrain all 4 models."""
+    from ironclad.models.trainer import ModelTrainer
+    from ironclad.workflow.backfill import BackfillWorkflow
+
+    logger.info("=== END-OF-SEASON RETRAIN: season=%d ===", season)
+    backfill_result = BackfillWorkflow().run([season])
+    logger.info("Season backfill complete: %s", backfill_result)
+
+    train_seasons = list(range(2016, season + 1))
+    metrics = ModelTrainer().train_all(train_seasons=train_seasons)
+    logger.info("Retrain complete: models=%s", list(metrics.keys()))
+    return {"backfill": backfill_result, "train": metrics}
 
 
 # ── Detection helpers ──────────────────────────────────────────────────────────
@@ -216,5 +235,24 @@ class WeeklyScheduler:
                     _save_state(state)
                 else:
                     logger.info("Post-game: no completed games found (pre-season?)")
+
+        # ── End-of-season retrain (February ≥ day 10, after Super Bowl) ─────
+        if now.month == 2 and now.day >= _RETRAIN_DAY:
+            season = detect_nfl_season(now.date())  # Feb → previous calendar year's season
+            retrain_key = f"retrain_{season}"
+            if state.get(retrain_key) != "done":
+                upcoming = detect_upcoming_week()
+                if upcoming is None:
+                    logger.info("End-of-season retrain due: season=%d", season)
+                    if not self.dry_run:
+                        r = run_end_of_season_retrain(season=season)
+                        result["retrain"] = r
+                    state[retrain_key] = "done"
+                    _save_state(state)
+                else:
+                    logger.info(
+                        "End-of-season retrain: upcoming games still found (%s), skipping",
+                        upcoming,
+                    )
 
         return result
