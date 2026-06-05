@@ -888,12 +888,31 @@ def _migrate(conn: duckdb.DuckDBPyConnection) -> None:
                 )
                 altered = True
 
-    # One-time type upgrades: ftn_charting booleans stored as rates (FLOAT, not INTEGER)
+    # One-time type upgrades: check current type before issuing ALTER to avoid
+    # writing WAL entries that DuckDB can't replay cleanly.
+    _TYPE_UPGRADES = [
+        ("bronze.ftn_charting", "is_play_action", "FLOAT"),
+        ("bronze.ftn_charting", "is_motion",      "FLOAT"),
+    ]
     try:
-        conn.execute("ALTER TABLE bronze.ftn_charting ALTER COLUMN is_play_action TYPE FLOAT")
-        conn.execute("ALTER TABLE bronze.ftn_charting ALTER COLUMN is_motion TYPE FLOAT")
+        type_rows = conn.execute("""
+            SELECT table_schema || '.' || table_name || '.' || column_name,
+                   data_type
+            FROM information_schema.columns
+        """).fetchall()
+        col_types = {r[0]: r[1] for r in type_rows}
     except Exception:
-        pass  # Already FLOAT or table doesn't exist yet
+        col_types = {}
+
+    for table, col, target_type in _TYPE_UPGRADES:
+        key = f"{table}.{col}"
+        current = col_types.get(key, "").upper()
+        if current and current != target_type.upper():
+            try:
+                conn.execute(f"ALTER TABLE {table} ALTER COLUMN {col} TYPE {target_type}")
+                altered = True
+            except Exception:
+                pass
 
     # Checkpoint only when we actually changed the schema, keeping the WAL clean
     if altered:
