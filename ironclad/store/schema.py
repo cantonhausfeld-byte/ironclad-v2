@@ -863,10 +863,30 @@ _EXPECTED_COLS: dict[str, list[tuple[str, str]]] = {
 
 
 def _migrate(conn: duckdb.DuckDBPyConnection) -> None:
-    """Ensure every expected column exists; adds missing ones without data loss."""
+    """Ensure every expected column exists; adds missing ones without data loss.
+
+    Checks information_schema BEFORE issuing ALTER TABLE so that no WAL writes
+    occur when the schema is already up-to-date.  This eliminates the WAL
+    accumulation that caused DuckDB corruption on repeated process restarts.
+    """
+    # Fetch all existing columns in one round-trip
+    try:
+        rows = conn.execute("""
+            SELECT table_schema || '.' || table_name || '.' || column_name
+            FROM information_schema.columns
+        """).fetchall()
+        existing = {r[0] for r in rows}
+    except Exception:
+        existing = set()  # fall back to always attempting ALTER (safe, just noisier)
+
+    altered = False
     for table, cols in _EXPECTED_COLS.items():
         for col, typ in cols:
-            conn.execute(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {typ}")
+            if f"{table}.{col}" not in existing:
+                conn.execute(
+                    f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col} {typ}"
+                )
+                altered = True
 
     # One-time type upgrades: ftn_charting booleans stored as rates (FLOAT, not INTEGER)
     try:
@@ -874,3 +894,10 @@ def _migrate(conn: duckdb.DuckDBPyConnection) -> None:
         conn.execute("ALTER TABLE bronze.ftn_charting ALTER COLUMN is_motion TYPE FLOAT")
     except Exception:
         pass  # Already FLOAT or table doesn't exist yet
+
+    # Checkpoint only when we actually changed the schema, keeping the WAL clean
+    if altered:
+        try:
+            conn.execute("CHECKPOINT")
+        except Exception:
+            pass
