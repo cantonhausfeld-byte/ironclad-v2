@@ -68,16 +68,30 @@ class IngestPipeline:
 
         if include_pbp:
             logger.info("=== Ingesting play-by-play ===")
-            counts["play_by_play"] = self._pbp.ingest(seasons)
+            try:
+                counts["play_by_play"] = self._pbp.ingest(seasons)
+            except Exception as exc:
+                logger.warning(
+                    "PBP ingest failed (non-fatal — expected for future seasons): %s", exc
+                )
+                counts["play_by_play"] = 0
 
         logger.info("=== Ingesting rosters ===")
         counts["rosters"] = self._rosters.ingest(seasons)
 
         logger.info("=== Ingesting injuries ===")
-        counts["injuries"] = self._injuries.ingest(seasons)
+        try:
+            counts["injuries"] = self._injuries.ingest(seasons)
+        except Exception as exc:
+            logger.warning("Injury ingest failed (non-fatal): %s", exc)
+            counts["injuries"] = 0
 
         logger.info("=== Ingesting depth charts ===")
-        counts["depth_charts"] = self._depth.ingest(seasons)
+        try:
+            counts["depth_charts"] = self._depth.ingest(seasons)
+        except Exception as exc:
+            logger.warning("Depth chart ingest failed (non-fatal): %s", exc)
+            counts["depth_charts"] = 0
 
         logger.info("=== Ingesting snap counts (nflverse) ===")
         try:
