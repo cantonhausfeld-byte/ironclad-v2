@@ -76,3 +76,70 @@ def post_run_summary(result: dict, conn=None) -> None:
         logger.info("Discord notification sent")
     except Exception as exc:
         logger.warning("Discord notification failed (non-fatal): %s", exc)
+
+
+def post_backfill_summary(result: dict) -> None:
+    """POST post-game backfill summary to Discord. No-ops if URL not configured."""
+    url = config.DISCORD_WEBHOOK_URL
+    if not url:
+        logger.debug("DISCORD_WEBHOOK_URL not set; skipping notification")
+        return
+
+    ingest = result.get("ingest", {})
+    silver = result.get("silver", {})
+    fb = result.get("features_built", 0)
+    ff = result.get("features_failed", 0)
+    color = _GREEN if ff == 0 else _YELLOW
+
+    fields = [
+        {"name": "PBP rows",          "value": str(ingest.get("play_by_play", "?")),  "inline": True},
+        {"name": "Roster rows",        "value": str(ingest.get("rosters", "?")),       "inline": True},
+        {"name": "Features built",     "value": f"{fb}" + (f" ({ff} failed)" if ff else ""), "inline": True},
+        {"name": "Silver games",       "value": str(silver.get("games", "?")),         "inline": True},
+        {"name": "Silver player rows", "value": str(silver.get("player_game_stats", "?")), "inline": True},
+    ]
+
+    payload = {
+        "embeds": [{
+            "title": "\U0001f4ca ironclad — post-game backfill complete",
+            "color": color,
+            "fields": fields,
+        }]
+    }
+
+    try:
+        resp = requests.post(url, json=payload, timeout=10)
+        resp.raise_for_status()
+        logger.info("Discord backfill notification sent")
+    except Exception as exc:
+        logger.warning("Discord notification failed (non-fatal): %s", exc)
+
+
+def post_retrain_summary(result: dict) -> None:
+    """POST end-of-season retrain summary to Discord. No-ops if URL not configured."""
+    url = config.DISCORD_WEBHOOK_URL
+    if not url:
+        logger.debug("DISCORD_WEBHOOK_URL not set; skipping notification")
+        return
+
+    train = result.get("train", {})
+    fields = []
+    for model_name, metrics in train.items():
+        val = metrics.get("val_brier") or metrics.get("val_log_loss") or metrics.get("accuracy")
+        val_str = f"{val:.4f}" if isinstance(val, float) else "—"
+        fields.append({"name": model_name, "value": val_str, "inline": True})
+
+    payload = {
+        "embeds": [{
+            "title": "\U0001f3c6 ironclad — end-of-season retrain complete",
+            "color": _GREEN,
+            "fields": fields if fields else [{"name": "Models", "value": ", ".join(train.keys()) or "none", "inline": False}],
+        }]
+    }
+
+    try:
+        resp = requests.post(url, json=payload, timeout=10)
+        resp.raise_for_status()
+        logger.info("Discord retrain notification sent")
+    except Exception as exc:
+        logger.warning("Discord notification failed (non-fatal): %s", exc)

@@ -16,6 +16,27 @@ logger = logging.getLogger(__name__)
 
 
 class BackfillWorkflow:
+    _SILVER_TABLES = [
+        "silver.player_weekly_status",
+        "silver.player_game_stats",
+        "silver.team_game_stats",
+        "silver.games",
+    ]
+
+    def delete_silver(self, seasons: list[int]) -> None:
+        """Delete silver rows for the given seasons so they can be cleanly rebuilt.
+
+        Needed when a normalization fix (e.g. team-code rename) must be applied to
+        rows that were already upserted under the old values.
+        """
+        conn = get_connection()
+        create_all_tables(conn)
+        season_list = ", ".join(str(s) for s in seasons)
+        for table in self._SILVER_TABLES:
+            n = conn.execute(f"SELECT COUNT(*) FROM {table} WHERE season IN ({season_list})").fetchone()[0]
+            conn.execute(f"DELETE FROM {table} WHERE season IN ({season_list})")
+            logger.info("Deleted %d rows from %s for seasons %s", n, table, seasons)
+
     def run(
         self,
         seasons: list[int],

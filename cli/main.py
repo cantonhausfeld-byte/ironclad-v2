@@ -45,7 +45,9 @@ def _validate_week(ctx, param, value):
               help="Single season shorthand")
 @click.option("--no-pbp", is_flag=True, default=False,
               help="Skip play-by-play (faster, no stats)")
-def backfill(seasons, season, no_pbp) -> None:
+@click.option("--rebuild-silver", is_flag=True, default=False,
+              help="Delete and rebuild silver rows for the given seasons (use after schema/normalization fixes)")
+def backfill(seasons, season, no_pbp, rebuild_silver) -> None:
     """Ingest historical data and build silver tables."""
     all_seasons = list(seasons)
     if season:
@@ -56,7 +58,11 @@ def backfill(seasons, season, no_pbp) -> None:
 
     click.echo(f"Backfilling seasons: {sorted(all_seasons)}")
     from ironclad.workflow.backfill import BackfillWorkflow
-    BackfillWorkflow().run(sorted(all_seasons), include_pbp=not no_pbp)
+    wf = BackfillWorkflow()
+    if rebuild_silver:
+        click.echo(f"Rebuilding silver for seasons: {sorted(all_seasons)}")
+        wf.delete_silver(sorted(all_seasons))
+    wf.run(sorted(all_seasons), include_pbp=not no_pbp)
     click.echo("Done.")
 
 
@@ -401,12 +407,18 @@ def odds() -> None:
               help="Only save edges with EV >= this value")
 @click.option("--no-odds", is_flag=True, default=False,
               help="Skip The Odds API fetch (use if ODDS_API_KEY not set)")
-def run_weekly(season, week, n_draws, kelly_fraction, min_ev, no_odds) -> None:
+@click.option("--historical", is_flag=True, default=False,
+              help="Target a completed week (removes gameday >= today filter); combine with --season/--week")
+def run_weekly(season, week, n_draws, kelly_fraction, min_ev, no_odds, historical) -> None:
     """Full weekly pipeline: data refresh → odds → simulate all games → save edges.
 
     Runs everything in one shot. Suitable for cron:
 
       0 10 * * 3  ironclad run   # every Wednesday at 10am
+
+    To retroactively generate edges for a completed week (using stored prop lines):
+
+      ironclad run --season 2025 --week 18 --historical --no-odds
     """
     from ironclad.workflow.auto_run import AutoRunWorkflow
 
@@ -416,6 +428,7 @@ def run_weekly(season, week, n_draws, kelly_fraction, min_ev, no_odds) -> None:
             kelly_fraction=kelly_fraction,
             min_ev=min_ev,
             skip_odds=no_odds,
+            historical=historical,
         ).run(season=season, week=week)
     except ValueError as exc:
         click.echo(f"ERROR: {exc}", err=True)
@@ -627,6 +640,49 @@ def settle(edge_id, result, units) -> None:
         f"{outcome['stat_type']} {outcome['side']}  |  "
         f"profit: {sign}{outcome['profit_units']:.2f} units"
     )
+
+
+# ── settle-week ──────────────────────────────────────────────────────────────
+
+@cli.command("settle-week")
+@click.option("--season", required=True, type=int, callback=_validate_season, is_eager=False)
+@click.option("--week", required=True, type=int, callback=_validate_week, is_eager=False)
+@click.option("--units", default=1.0, show_default=True, type=float,
+              help="Units wagered per edge (e.g. 1.0 = one Kelly unit)")
+def settle_week(season, week, units) -> None:
+    """Auto-settle all unsettled prop edges for a completed week against actual stats.
+
+    Reads actual outcomes from bronze.player_stats_weekly and settles every edge
+    in gold.betting_edges for the given season/week that has not been settled yet.
+
+    Typical retroactive flow:
+
+      ironclad run --season 2025 --week 18 --historical --no-odds
+      ironclad settle-week --season 2025 --week 18
+      ironclad results
+    """
+    from ironclad.eval.performance_tracker import auto_settle_week, pnl_summary
+    from ironclad.store.connection import get_connection
+    from ironclad.store.schema import create_all_tables
+    conn = get_connection()
+    create_all_tables(conn)
+
+    settled = auto_settle_week(conn, season, week, units_wagered=units)
+    if not settled:
+        click.echo(
+            f"No unsettled edges found for season {season} week {week}. "
+            "Run `ironclad run --season <Y> --week <N> --historical --no-odds` first."
+        )
+        return
+
+    wins = sum(1 for r in settled if r["result"] == "win")
+    losses = sum(1 for r in settled if r["result"] == "loss")
+    pushes = sum(1 for r in settled if r["result"] == "push")
+    total_profit = sum(r["profit_units"] for r in settled)
+    click.echo(f"\nAuto-settled {len(settled)} bets for {season} Week {week}")
+    click.echo(f"  W/L/P:  {wins}/{losses}/{pushes}")
+    click.echo(f"  Profit: {total_profit:+.2f} units")
+    click.echo("\nRun `ironclad results` for full P&L history.")
 
 
 # ── results ───────────────────────────────────────────────────────────────────

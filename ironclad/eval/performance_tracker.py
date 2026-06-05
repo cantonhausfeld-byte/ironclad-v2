@@ -145,6 +145,90 @@ def pnl_summary(results_df: pd.DataFrame) -> dict[str, Any]:
     }
 
 
+_STAT_COL: dict[str, str] = {
+    "pass_yards":   "passing_yards",
+    "pass_tds":     "passing_tds",
+    "rush_yards":   "rushing_yards",
+    "rush_tds":     "rushing_tds",
+    "receptions":   "receptions",
+    "rec_yards":    "receiving_yards",
+    "rec_tds":      "receiving_tds",
+    "carries":      "carries",
+    "completions":  "completions",
+    "pass_attempts": "attempts",
+    "targets":      "targets",
+}
+
+
+def auto_settle_week(
+    conn,
+    season: int,
+    week: int,
+    units_wagered: float = 1.0,
+) -> list[dict]:
+    """Auto-settle all unsettled edges for a completed week against actual stats.
+
+    Looks up each edge's player actual stat from bronze.player_stats_weekly,
+    compares to the market_line + side (over/under), and calls settle_bet().
+
+    Returns a list of settled-row dicts (one per edge that was settled).
+    """
+    already_settled = conn.execute(
+        "SELECT edge_id FROM gold.betting_results"
+    ).df()["edge_id"].tolist()
+
+    edges = conn.execute("""
+        SELECT e.edge_id, e.player_id, e.stat_type, e.side, e.market_line,
+               g.season, g.week
+        FROM gold.betting_edges e
+        JOIN silver.games g ON e.game_id = g.game_id
+        WHERE g.season = ? AND g.week = ? AND g.season_type = 'REG'
+    """, [season, week]).df()
+
+    if edges.empty:
+        return []
+
+    actuals = conn.execute("""
+        SELECT player_id, season, week,
+               passing_yards, passing_tds, rushing_yards, rushing_tds,
+               receptions, receiving_yards, receiving_tds,
+               carries, completions, attempts, targets
+        FROM bronze.player_stats_weekly
+        WHERE season = ? AND week = ?
+    """, [season, week]).df()
+
+    settled = []
+    for _, edge in edges.iterrows():
+        if edge["edge_id"] in already_settled:
+            continue
+
+        col = _STAT_COL.get(edge["stat_type"])
+        if col is None:
+            continue
+
+        player_rows = actuals[actuals["player_id"] == edge["player_id"]]
+        if player_rows.empty:
+            continue
+
+        actual_val = float(player_rows.iloc[0][col])
+        line = float(edge["market_line"]) if edge["market_line"] is not None else None
+        if line is None:
+            continue
+
+        side = str(edge["side"]).lower()
+        if side == "over":
+            outcome = "win" if actual_val > line else ("push" if actual_val == line else "loss")
+        elif side == "under":
+            outcome = "win" if actual_val < line else ("push" if actual_val == line else "loss")
+        else:
+            continue
+
+        row = settle_bet(conn, edge["edge_id"], outcome, units_wagered)
+        settled.append(row)
+
+    return settled
+
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _float_or_none(v: Any) -> float | None:

@@ -191,19 +191,25 @@ def _fetch_player_props(
                 continue
 
             # Group outcomes by player name: {name: {line, over_odds, under_odds}}
+            # anytime_td uses player name in the "description" field, not "name"
+            # (which is "Yes"/"No" for team-level binary markets — skip those).
             by_player: dict[str, dict] = {}
             for outcome in market.get("outcomes", []):
-                pname = outcome.get("name", "")
-                desc = (outcome.get("description") or "").lower()
+                desc = (outcome.get("description") or "").strip()
+                pname = desc if (stat_type == "anytime_td" and desc) else outcome.get("name", "")
+                # Skip binary "Yes"/"No" entries that have no player identity
+                if pname.lower() in ("yes", "no", ""):
+                    continue
+                side = (outcome.get("name") or "").lower()
                 price = outcome.get("price")
                 point = outcome.get("point")
                 if pname not in by_player:
                     by_player[pname] = {"line": point, "over_odds": None, "under_odds": None}
-                if stat_type == "anytime_td" or "over" in desc:
+                if stat_type == "anytime_td" or "over" in side:
                     by_player[pname]["over_odds"] = price
                     if point is not None:
                         by_player[pname]["line"] = point
-                elif "under" in desc:
+                elif "under" in side:
                     by_player[pname]["under_odds"] = price
 
             for pname, prop in by_player.items():

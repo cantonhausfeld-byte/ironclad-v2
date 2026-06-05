@@ -214,6 +214,8 @@ class WeeklyScheduler:
                             min_ev=self.min_ev,
                         )
                         result["pre_game"] = r
+                        from ironclad.notifications.discord import post_run_summary
+                        post_run_summary(r)
                     state[pre_key] = "done"
                     _save_state(state)
                 else:
@@ -231,6 +233,8 @@ class WeeklyScheduler:
                     if not self.dry_run:
                         r = run_post_game(season=season, n_draws=self.n_draws)
                         result["post_game"] = r
+                        from ironclad.notifications.discord import post_backfill_summary
+                        post_backfill_summary(r)
                     state[post_key] = "done"
                     _save_state(state)
                 else:
@@ -247,6 +251,8 @@ class WeeklyScheduler:
                     if not self.dry_run:
                         r = run_end_of_season_retrain(season=season)
                         result["retrain"] = r
+                        from ironclad.notifications.discord import post_retrain_summary
+                        post_retrain_summary(r)
                     state[retrain_key] = "done"
                     _save_state(state)
                 else:

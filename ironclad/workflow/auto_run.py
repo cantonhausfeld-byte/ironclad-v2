@@ -32,11 +32,13 @@ class AutoRunWorkflow:
         kelly_fraction: float = 0.25,
         min_ev: float = 0.0,
         skip_odds: bool = False,
+        historical: bool = False,
     ) -> None:
         self.n_draws = n_draws
         self.kelly_fraction = kelly_fraction
         self.min_ev = min_ev
         self.skip_odds = skip_odds
+        self.historical = historical  # allow targeting completed weeks (no gameday >= today filter)
 
     def run(self, season: int | None = None, week: int | None = None) -> dict:
         conn = get_connection()
@@ -45,7 +47,7 @@ class AutoRunWorkflow:
         # ── 1. Auto-detect week if not provided ──────────────────────────────
         if season is None or week is None:
             season, week = detect_current_week(conn)
-        logger.info("Auto-run: season=%d week=%d", season, week)
+        logger.info("Auto-run: season=%d week=%d historical=%s", season, week, self.historical)
 
         # ── 2. Data pipeline refresh ─────────────────────────────────────────
         from ironclad.workflow.weekly import WeeklyWorkflow
@@ -75,14 +77,23 @@ class AutoRunWorkflow:
             except Exception as exc:
                 logger.warning("Odds fetch failed (continuing without props): %s", exc)
 
-        # ── 4. Simulate upcoming games + save edges ───────────────────────────
-        today = date.today().isoformat()
-        games_df = conn.execute("""
-            SELECT game_id FROM silver.games
-            WHERE season = ? AND week = ? AND season_type = 'REG'
-              AND CAST(gameday AS VARCHAR) >= ?
-            ORDER BY gameday
-        """, [season, week, today]).df()
+        # ── 4. Simulate games + save edges ────────────────────────────────────
+        # In historical mode: include completed games (no date filter).
+        # In normal mode: only upcoming games (gameday >= today).
+        if self.historical:
+            games_df = conn.execute("""
+                SELECT game_id FROM silver.games
+                WHERE season = ? AND week = ? AND season_type = 'REG'
+                ORDER BY gameday
+            """, [season, week]).df()
+        else:
+            today = date.today().isoformat()
+            games_df = conn.execute("""
+                SELECT game_id FROM silver.games
+                WHERE season = ? AND week = ? AND season_type = 'REG'
+                  AND CAST(gameday AS VARCHAR) >= ?
+                ORDER BY gameday
+            """, [season, week, today]).df()
 
         from ironclad.betting.props import PropAnalyzer, load_prop_lines_from_db
         from ironclad.eval.performance_tracker import save_edges
