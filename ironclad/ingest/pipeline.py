@@ -150,7 +150,7 @@ class IngestPipeline:
         return counts
 
     def _ingest_weather(self) -> int:
-        # Pull games with stadium coordinates to fetch weather
+        # Pull games that need weather: have coordinates, are outdoors, and not yet stored
         try:
             df = self._conn.execute("""
                 SELECT g.game_id, g.gameday, s.lat, s.lon
@@ -158,9 +158,12 @@ class IngestPipeline:
                 LEFT JOIN bronze.stadiums s ON g.home_team = s.team
                 WHERE s.lat IS NOT NULL AND s.is_dome = false
                   AND g.gameday IS NOT NULL
+                  AND g.game_id NOT IN (SELECT DISTINCT game_id FROM bronze.weather)
             """).df()
             if df.empty:
+                logger.info("Weather: all games already stored, nothing to fetch")
                 return 0
+            logger.info("Weather: fetching for %d games without data", len(df))
             return self._weather.ingest(df)
         except Exception as exc:
             logger.warning("Weather ingest failed: %s", exc)

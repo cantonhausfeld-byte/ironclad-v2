@@ -1,0 +1,30 @@
+# ironclad weekly automation — two options, pick ONE:
+#
+# Option A: Let the scheduler daemon decide when to fire (recommended)
+#   Run `ironclad schedule` once at startup; it wakes every 15 min to check.
+#   Add this line so it restarts if the machine reboots:
+#
+# @reboot /path/to/venv/bin/ironclad schedule >> /var/log/ironclad/scheduler.log 2>&1
+#
+#
+# Option B: Direct cron entries (no daemon needed)
+#
+# Runs in the IRONCLAD_DIR directory where data/ironclad.ddb lives.
+# Adjust the paths below for your environment.
+#
+# IRONCLAD=/path/to/venv/bin/ironclad
+# IRONCLAD_DIR=/home/user/ironclad-v2
+# LOG_DIR=/var/log/ironclad
+#
+# ── Pre-game: Wednesday 10am — fetch odds, simulate, save edges ──────────────
+# 0 10 * * 3  cd $IRONCLAD_DIR && $IRONCLAD run >> $LOG_DIR/run.log 2>&1
+#
+# ── Post-game: Tuesday 6am — backfill new PBP/stats, rebuild targets ─────────
+# 0 6  * * 2  cd $IRONCLAD_DIR && $IRONCLAD backfill --season $(date -d "last year" +%Y) >> $LOG_DIR/backfill.log 2>&1
+#
+# NOTE: The --season argument above uses the previous year for Jan/Feb games.
+# For a more robust solution use `ironclad schedule --once` which auto-detects
+# the current season and week:
+#
+# 0 10 * * 3  cd $IRONCLAD_DIR && $IRONCLAD schedule --once >> $LOG_DIR/scheduler.log 2>&1
+# 0 6  * * 2  cd $IRONCLAD_DIR && $IRONCLAD schedule --once >> $LOG_DIR/scheduler.log 2>&1

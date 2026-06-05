@@ -1,0 +1,21 @@
+[Unit]
+Description=ironclad weekly NFL automation scheduler
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=user
+WorkingDirectory=/home/user/ironclad-v2
+ExecStart=/home/user/ironclad-v2/.venv/bin/ironclad schedule
+Restart=on-failure
+RestartSec=60
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ironclad
+
+# Ensure the data directory exists
+ExecStartPre=/bin/mkdir -p /home/user/ironclad-v2/data /var/log/ironclad
+
+[Install]
+WantedBy=multi-user.target

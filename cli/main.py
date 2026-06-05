@@ -945,5 +945,53 @@ def api_serve(port, host) -> None:
     uvicorn.run("ironclad.api.app:app", host=host, port=port, reload=False)
 
 
+# ── schedule ──────────────────────────────────────────────────────────────────
+
+@cli.command("schedule")
+@click.option("--n-draws", default=DEFAULT_N_DRAWS, show_default=True, type=int)
+@click.option("--kelly-fraction", default=0.25, show_default=True, type=float)
+@click.option("--min-ev", default=0.0, show_default=True, type=float)
+@click.option("--poll-interval", default=900, show_default=True, type=int,
+              help="Seconds between schedule checks (default 900 = 15 min)")
+@click.option("--once", is_flag=True, default=False,
+              help="Check once and exit instead of running forever")
+@click.option("--dry-run", is_flag=True, default=False,
+              help="Log what would run without executing jobs")
+def schedule(n_draws, kelly_fraction, min_ev, poll_interval, once, dry_run) -> None:
+    """Long-running weekly automation: pre-game odds+simulation and post-game backfill.
+
+    Fires two jobs automatically each week:
+
+    \b
+      WEDNESDAY 10am  — ironclad run (fetch odds, simulate, save edges)
+      TUESDAY   6am   — ironclad backfill (ingest new PBP/stats, rebuild targets)
+
+    Run once at startup via cron or systemd; it handles the rest.
+    Use --once to check right now and exit (good for testing).
+    """
+    from ironclad.workflow.scheduler import WeeklyScheduler
+    sched = WeeklyScheduler(
+        n_draws=n_draws,
+        kelly_fraction=kelly_fraction,
+        min_ev=min_ev,
+        poll_interval=poll_interval,
+        dry_run=dry_run,
+    )
+    if once:
+        result = sched.run_once()
+        if result:
+            click.echo(f"Jobs run: {list(result.keys())}")
+        else:
+            click.echo("No jobs were due at this time.")
+    else:
+        click.echo("ironclad scheduler running. Press Ctrl+C to stop.")
+        click.echo("  Pre-game  : Wednesday 10am")
+        click.echo("  Post-game : Tuesday 6am")
+        try:
+            sched.run()
+        except KeyboardInterrupt:
+            click.echo("\nScheduler stopped.")
+
+
 if __name__ == "__main__":
     cli()
