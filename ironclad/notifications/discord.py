@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 _GREEN  = 3066993
 _YELLOW = 16776960
+_BLUE   = 3447003
 
 
 def post_run_summary(result: dict, conn=None) -> None:
@@ -143,3 +144,83 @@ def post_retrain_summary(result: dict) -> None:
         logger.info("Discord retrain notification sent")
     except Exception as exc:
         logger.warning("Discord notification failed (non-fatal): %s", exc)
+
+
+def post_model_output(
+    game_id: str,
+    report_md: str,
+    top_edges_df=None,
+    win_prob_home: float | None = None,
+    win_prob_away: float | None = None,
+    home_team: str = "",
+    away_team: str = "",
+    projected_home: int | None = None,
+    projected_away: int | None = None,
+    season: int | None = None,
+    week: int | None = None,
+) -> None:
+    """POST a matchup report to Discord: embed summary + .md file attachment."""
+    import json
+
+    url = config.DISCORD_WEBHOOK_URL
+    if not url:
+        logger.debug("DISCORD_WEBHOOK_URL not set; skipping model output notification")
+        return
+
+    title = f"\U0001f3c8 {away_team} @ {home_team}"
+    if season and week:
+        title += f" — {season} Week {week}"
+
+    fields = []
+    if win_prob_home is not None and win_prob_away is not None:
+        fields.append({
+            "name": f"{home_team} win prob",
+            "value": f"**{win_prob_home * 100:.1f}%**",
+            "inline": True,
+        })
+        fields.append({
+            "name": f"{away_team} win prob",
+            "value": f"**{win_prob_away * 100:.1f}%**",
+            "inline": True,
+        })
+    if projected_home is not None and projected_away is not None:
+        fields.append({
+            "name": "Projected score",
+            "value": f"{away_team} {projected_away} — {home_team} {projected_home}",
+            "inline": False,
+        })
+
+    if top_edges_df is not None and not top_edges_df.empty:
+        lines = []
+        for _, r in top_edges_df.head(5).iterrows():
+            line_str = f"{r['market_line']}" if r.get("market_line") is not None else "—"
+            ev_str = f"{r['ev']:+.3f}" if r.get("ev") is not None else ""
+            lines.append(
+                f"`{str(r['player_name']):<22} {str(r['stat_type']):<12} "
+                f"{str(r['side']):<5} {line_str:<6} EV {ev_str}`"
+            )
+        if lines:
+            fields.append({
+                "name": f"Top edges ({len(top_edges_df)} total)",
+                "value": "\n".join(lines),
+                "inline": False,
+            })
+
+    embed = {
+        "title": title,
+        "color": _BLUE,
+        "fields": fields,
+        "footer": {"text": game_id},
+    }
+
+    try:
+        resp = requests.post(
+            url,
+            data={"payload_json": json.dumps({"embeds": [embed]})},
+            files={"file": (f"{game_id}.md", report_md.encode("utf-8"), "text/markdown")},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        logger.info("Discord model output posted for %s", game_id)
+    except Exception as exc:
+        logger.warning("Discord model output failed (non-fatal): %s", exc)

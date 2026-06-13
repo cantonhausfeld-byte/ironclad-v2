@@ -102,7 +102,10 @@ def weekly(season, week) -> None:
               help="Auto-backfill season data if game not found")
 @click.option("--use-drive-sim", is_flag=True, default=False,
               help="Use drive-level Markov chain simulation instead of score-distribution GameDraw")
-def report(game_id, home, away, week, season, fmt, output_dir, n_draws, backfill_if_missing, use_drive_sim) -> None:
+@click.option("--post-to-discord", is_flag=True, default=False,
+              help="Post the rendered report and top edges to Discord (requires DISCORD_WEBHOOK_URL)")
+def report(game_id, home, away, week, season, fmt, output_dir, n_draws, backfill_if_missing,
+           use_drive_sim, post_to_discord) -> None:
     """Generate a pregame matchup report."""
     # Resolve game_id from team names if not provided
     if not game_id:
@@ -117,13 +120,55 @@ def report(game_id, home, away, week, season, fmt, output_dir, n_draws, backfill
     click.echo(f"Generating report for {game_id}  (n_draws={n_draws})")
     from ironclad.workflow.matchup import MatchupWorkflow
     try:
-        path = MatchupWorkflow(n_draws=n_draws, use_drive_sim=use_drive_sim).run(
+        wf = MatchupWorkflow(n_draws=n_draws, use_drive_sim=use_drive_sim)
+        path = wf.run(
             game_id=game_id,
             output_dir=Path(output_dir),
             fmt=fmt,
             backfill_if_missing=backfill_if_missing,
         )
         click.echo(f"\nReport written to: {path}")
+
+        if post_to_discord:
+            from ironclad.notifications.discord import post_model_output
+            from ironclad.store.connection import get_connection
+
+            report_md = path.read_text(encoding="utf-8")
+
+            # Pull simulation metadata from a fresh simulate() call would re-run;
+            # instead parse what we can from the written report and the DB.
+            conn = get_connection()
+            try:
+                top_edges = conn.execute("""
+                    SELECT player_name, stat_type, side, market_line, ev
+                    FROM gold.betting_edges
+                    WHERE game_id = ?
+                    ORDER BY ev DESC LIMIT 10
+                """, [game_id]).df()
+            except Exception:
+                top_edges = None
+
+            # Extract game info from silver.games for the embed
+            game_row = conn.execute(
+                "SELECT home_team, away_team, season, week FROM silver.games WHERE game_id = ?",
+                [game_id],
+            ).fetchone()
+            h_team = game_row[0] if game_row else ""
+            a_team = game_row[1] if game_row else ""
+            s = game_row[2] if game_row else None
+            w = game_row[3] if game_row else None
+
+            post_model_output(
+                game_id=game_id,
+                report_md=report_md,
+                top_edges_df=top_edges if top_edges is not None and not top_edges.empty else None,
+                home_team=h_team,
+                away_team=a_team,
+                season=s,
+                week=w,
+            )
+            click.echo("Discord: model output posted.")
+
     except ValueError as e:
         click.echo(f"ERROR: {e}", err=True)
         sys.exit(1)

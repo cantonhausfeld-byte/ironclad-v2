@@ -103,6 +103,9 @@ class AutoRunWorkflow:
         edges_saved = 0
         skipped: list[str] = []
 
+        from ironclad import config as _cfg
+        _discord_enabled = bool(_cfg.DISCORD_WEBHOOK_URL)
+
         for game_id in games_df["game_id"].tolist():
             try:
                 prop_lines = load_prop_lines_from_db(conn, game_id)
@@ -110,7 +113,7 @@ class AutoRunWorkflow:
                     skipped.append(f"{game_id} (no props in DB)")
                     continue
 
-                result, _, _, _ = MatchupWorkflow(n_draws=self.n_draws).simulate(game_id)
+                result, game_meta, cutoff_ts, _ = MatchupWorkflow(n_draws=self.n_draws).simulate(game_id)
 
                 edges_df = PropAnalyzer(kelly_fraction=self.kelly_fraction).analyze(
                     result, prop_lines
@@ -123,6 +126,34 @@ class AutoRunWorkflow:
                     edges_saved += len(ids)
 
                 games_simulated += 1
+
+                # Post model output to Discord if webhook is configured and edges were found
+                if _discord_enabled and not edges_df.empty:
+                    try:
+                        from ironclad.notifications.discord import post_model_output
+                        from ironclad.report.builder import build_report_context
+                        from ironclad.report.markdown_renderer import render_markdown_str
+                        hw, aw = result.win_probability()
+                        scores = result.score_summary()
+                        ctx = build_report_context(result, game_meta, cutoff_ts, n_draws=self.n_draws)
+                        report_md = render_markdown_str(ctx)
+                        top = edges_df.sort_values("ev", ascending=False)
+                        post_model_output(
+                            game_id=game_id,
+                            report_md=report_md,
+                            top_edges_df=top,
+                            win_prob_home=hw,
+                            win_prob_away=aw,
+                            home_team=result.home_team,
+                            away_team=result.away_team,
+                            projected_home=round(scores["home_score_mean"]),
+                            projected_away=round(scores["away_score_mean"]),
+                            season=game_meta.get("season"),
+                            week=game_meta.get("week"),
+                        )
+                    except Exception as exc:
+                        logger.warning("Discord model output failed for %s: %s", game_id, exc)
+
             except Exception as exc:
                 logger.warning("Game %s failed: %s", game_id, exc)
                 skipped.append(f"{game_id} (error: {exc})")
