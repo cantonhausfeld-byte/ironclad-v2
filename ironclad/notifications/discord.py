@@ -146,6 +146,24 @@ def post_retrain_summary(result: dict) -> None:
         logger.warning("Discord notification failed (non-fatal): %s", exc)
 
 
+def _md_chunks(text: str, limit: int = 1900) -> list[str]:
+    """Split markdown into chunks ≤ limit chars, breaking on newlines."""
+    chunks: list[str] = []
+    current: list[str] = []
+    current_len = 0
+    for line in text.splitlines(keepends=True):
+        if current_len + len(line) > limit and current:
+            chunks.append("".join(current))
+            current = [line]
+            current_len = len(line)
+        else:
+            current.append(line)
+            current_len += len(line)
+    if current:
+        chunks.append("".join(current))
+    return chunks
+
+
 def post_model_output(
     game_id: str,
     report_md: str,
@@ -159,9 +177,7 @@ def post_model_output(
     season: int | None = None,
     week: int | None = None,
 ) -> None:
-    """POST a matchup report to Discord: embed summary + .md file attachment."""
-    import json
-
+    """POST a matchup report to Discord: summary embed then full report as inline messages."""
     url = config.DISCORD_WEBHOOK_URL
     if not url:
         logger.debug("DISCORD_WEBHOOK_URL not set; skipping model output notification")
@@ -214,13 +230,19 @@ def post_model_output(
     }
 
     try:
-        resp = requests.post(
-            url,
-            data={"payload_json": json.dumps({"embeds": [embed]})},
-            files={"file": (f"{game_id}.md", report_md.encode("utf-8"), "text/markdown")},
-            timeout=15,
-        )
+        resp = requests.post(url, json={"embeds": [embed]}, timeout=15)
         resp.raise_for_status()
-        logger.info("Discord model output posted for %s", game_id)
     except Exception as exc:
         logger.warning("Discord model output failed (non-fatal): %s", exc)
+        return
+
+    # Send full report as inline chat messages (chunked to stay under Discord's 2000-char limit)
+    for chunk in _md_chunks(report_md):
+        try:
+            resp = requests.post(url, json={"content": chunk}, timeout=10)
+            resp.raise_for_status()
+        except Exception as exc:
+            logger.warning("Discord report chunk failed for %s: %s", game_id, exc)
+            break
+
+    logger.info("Discord model output posted for %s", game_id)
