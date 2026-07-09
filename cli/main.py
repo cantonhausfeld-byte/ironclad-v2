@@ -582,6 +582,72 @@ def edges(game_id, props_file, n_draws, kelly_fraction, min_ev, backfill_if_miss
         click.echo(f"Edge IDs: {', '.join(ids)}")
 
 
+# ── top-edges ─────────────────────────────────────────────────────────────────
+
+@cli.command("top-edges")
+@click.option("--game-id", default=None, help="Filter to a specific game")
+@click.option("--season", default=None, type=int, help="Filter by season (with --week)")
+@click.option("--week", default=None, type=int, help="Filter by week")
+@click.option("--min-ev", default=0.0, show_default=True, type=float,
+              help="Only include edges with EV >= this value")
+@click.option("--limit", default=10, show_default=True, type=int)
+def top_edges(game_id, season, week, min_ev, limit) -> None:
+    """Show top edges from gold.betting_edges (no simulation)."""
+    from ironclad.notifications.formatters import format_top_edges_block
+    from ironclad.store.connection import get_connection
+    from ironclad.store.schema import create_all_tables
+
+    conn = get_connection()
+    create_all_tables(conn)
+
+    where = ["ev >= ?"]
+    params: list = [min_ev]
+    if game_id:
+        where.append("e.game_id = ?")
+        params.append(game_id)
+    if season is not None:
+        where.append("g.season = ?")
+        params.append(season)
+    if week is not None:
+        where.append("g.week = ?")
+        params.append(week)
+
+    sql = f"""
+        SELECT e.player_name, e.stat_type, e.side, e.market_line, e.ev, e.kelly
+        FROM gold.betting_edges e
+        LEFT JOIN silver.games g ON g.game_id = e.game_id
+        WHERE {' AND '.join(where)}
+        ORDER BY e.ev DESC
+        LIMIT ?
+    """
+    params.append(limit)
+    df = conn.execute(sql, params).df()
+
+    click.echo(format_top_edges_block(df, limit=limit))
+
+
+# ── compare-teams ─────────────────────────────────────────────────────────────
+
+@cli.command("compare-teams")
+@click.argument("team_a")
+@click.argument("team_b")
+@click.option("--season", required=True, type=int)
+def compare_teams(team_a, team_b, season) -> None:
+    """Side-by-side season-to-date team stats."""
+    from ironclad.notifications.formatters import format_team_comparison_block
+    from ironclad.store.connection import get_connection
+    from ironclad.store.schema import create_all_tables
+
+    conn = get_connection()
+    create_all_tables(conn)
+
+    block = format_team_comparison_block(conn, team_a.upper(), team_b.upper(), season)
+    if block is None:
+        click.echo(f"No stats found for {team_a}/{team_b} in {season}.")
+        return
+    click.echo(block)
+
+
 # ── parlay ────────────────────────────────────────────────────────────────────
 
 @cli.command()

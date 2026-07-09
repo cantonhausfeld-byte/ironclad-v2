@@ -107,6 +107,24 @@ class ResultsResponse(BaseModel):
     bets: list[dict[str, Any]]
 
 
+class StoredEdgeItem(BaseModel):
+    game_id: str
+    season: int | None = None
+    week: int | None = None
+    player_name: str | None = None
+    stat_type: str
+    side: str
+    market_line: float | None = None
+    ev: float | None = None
+    kelly: float | None = None
+
+
+class StatusResponse(BaseModel):
+    tables: dict[str, int]
+    models: dict[str, list[str]]
+    scheduler: dict[str, Any]
+
+
 def _ro_conn():
     """Read-only connection for API endpoints.
 
@@ -120,11 +138,20 @@ def _ro_conn():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import duckdb
+
+    from ironclad.config import DB_PATH
     from ironclad.store.schema import create_all_tables
-    # Bootstrap schemas using a brief read-write connection, then close it so
-    # the batch process can acquire the writer lock unobstructed.
-    rw_conn = get_connection(read_only=False)
+    # Bootstrap schemas using a short-lived read-write connection that is
+    # closed before we start serving. Leaving it open would block read-only
+    # request-thread connections (DuckDB refuses mixed-mode opens on the
+    # same file) and prevent batch writers from acquiring the writer lock.
+    rw_conn = duckdb.connect(str(DB_PATH), read_only=False)
+    rw_conn.execute("CREATE SCHEMA IF NOT EXISTS bronze")
+    rw_conn.execute("CREATE SCHEMA IF NOT EXISTS silver")
+    rw_conn.execute("CREATE SCHEMA IF NOT EXISTS gold")
     create_all_tables(rw_conn)
+    rw_conn.close()
     logger.info("ironclad API started")
     yield
     logger.info("ironclad API stopped")
@@ -272,3 +299,99 @@ def get_results(
     bets = df.to_dict("records") if not df.empty else []
 
     return ResultsResponse(summary=summary, bets=bets)
+
+
+# ── GET /api/v1/edges/stored ──────────────────────────────────────────────────
+
+@app.get("/api/v1/edges/stored", response_model=list[StoredEdgeItem])
+def get_stored_edges(
+    game_id: str | None = Query(None),
+    season: int | None = Query(None),
+    week: int | None = Query(None),
+    min_ev: float = Query(0.0),
+    limit: int = Query(25, ge=1, le=500),
+):
+    """Read stored edges from gold.betting_edges (no simulation)."""
+    conn = _ro_conn()
+    where = ["e.ev >= ?"]
+    params: list = [min_ev]
+    if game_id:
+        where.append("e.game_id = ?")
+        params.append(game_id)
+    if season is not None:
+        where.append("g.season = ?")
+        params.append(season)
+    if week is not None:
+        where.append("g.week = ?")
+        params.append(week)
+
+    sql = f"""
+        SELECT e.game_id, g.season, g.week,
+               e.player_name, e.stat_type, e.side, e.market_line, e.ev, e.kelly
+        FROM gold.betting_edges e
+        LEFT JOIN silver.games g ON g.game_id = e.game_id
+        WHERE {' AND '.join(where)}
+        ORDER BY e.ev DESC
+        LIMIT ?
+    """
+    params.append(limit)
+    try:
+        df = conn.execute(sql, params).df()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    return df.to_dict("records") if not df.empty else []
+
+
+# ── GET /api/v1/status ────────────────────────────────────────────────────────
+
+_STATUS_TABLES = [
+    "bronze.schedules", "bronze.play_by_play", "bronze.rosters",
+    "silver.games", "silver.team_game_stats", "silver.player_game_stats",
+    "gold.team_game_features", "gold.player_game_features", "gold.betting_edges",
+]
+
+
+@app.get("/api/v1/status", response_model=StatusResponse)
+def get_status():
+    """Data-store, model-registry, and scheduler snapshot."""
+    import json
+    from pathlib import Path
+
+    from ironclad.config import DATA_DIR
+    from ironclad.models.registry import ModelRegistry
+
+    conn = _ro_conn()
+    tables: dict[str, int] = {}
+    for t in _STATUS_TABLES:
+        try:
+            n = conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
+        except Exception:
+            n = 0
+        tables[t] = int(n)
+
+    registry = ModelRegistry()
+    models: dict[str, list[str]] = {}
+    for name in ["game_outcome", "score_env", "player_usage", "player_efficiency"]:
+        try:
+            models[name] = registry.list_versions(name)
+        except Exception:
+            models[name] = []
+
+    scheduler: dict[str, Any] = {}
+    state_path = Path(DATA_DIR) / "scheduler_state.json"
+    if state_path.exists():
+        try:
+            scheduler = json.loads(state_path.read_text())
+        except Exception:
+            scheduler = {}
+
+    return StatusResponse(tables=tables, models=models, scheduler=scheduler)
+
+
+# ── GET /api/v1/health ────────────────────────────────────────────────────────
+
+@app.get("/api/v1/health")
+def health():
+    """Liveness check."""
+    return {"status": "ok"}

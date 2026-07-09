@@ -13,9 +13,10 @@ def get_connection(read_only: bool = False) -> duckdb.DuckDBPyConnection:
     attr = "_conn_ro" if read_only else "_conn"
     if not hasattr(_local, attr):
         conn = duckdb.connect(str(DB_PATH), read_only=read_only)
-        conn.execute("CREATE SCHEMA IF NOT EXISTS bronze")
-        conn.execute("CREATE SCHEMA IF NOT EXISTS silver")
-        conn.execute("CREATE SCHEMA IF NOT EXISTS gold")
+        if not read_only:
+            conn.execute("CREATE SCHEMA IF NOT EXISTS bronze")
+            conn.execute("CREATE SCHEMA IF NOT EXISTS silver")
+            conn.execute("CREATE SCHEMA IF NOT EXISTS gold")
         setattr(_local, attr, conn)
     return getattr(_local, attr)
 

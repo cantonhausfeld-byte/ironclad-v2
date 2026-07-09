@@ -146,21 +146,66 @@ def post_retrain_summary(result: dict) -> None:
         logger.warning("Discord notification failed (non-fatal): %s", exc)
 
 
-def _md_chunks(text: str, limit: int = 1900) -> list[str]:
-    """Split markdown into chunks ≤ limit chars, breaking on newlines."""
-    chunks: list[str] = []
+def _fence_tables(text: str) -> str:
+    """Wrap contiguous pipe-table blocks in triple-backtick fences for Discord monospace."""
+    lines = text.splitlines()
+    out: list[str] = []
+    in_table = False
+    for line in lines:
+        is_table_line = line.startswith("|")
+        if is_table_line and not in_table:
+            out.append("```")
+            in_table = True
+        elif not is_table_line and in_table:
+            out.append("```")
+            in_table = False
+        out.append(line)
+    if in_table:
+        out.append("```")
+    return "\n".join(out)
+
+
+def _split_by_subsection(section: str, limit: int) -> list[str]:
+    """Split an oversized section on `###` boundaries, re-closing fences at breaks."""
+    if len(section) <= limit:
+        return [section]
+    parts: list[str] = []
     current: list[str] = []
     current_len = 0
-    for line in text.splitlines(keepends=True):
-        if current_len + len(line) > limit and current:
-            chunks.append("".join(current))
+    for line in section.splitlines(keepends=True):
+        if line.lstrip().startswith("### ") and current_len + len(line) > limit and current:
+            parts.append("".join(current))
             current = [line]
             current_len = len(line)
         else:
             current.append(line)
             current_len += len(line)
     if current:
-        chunks.append("".join(current))
+        parts.append("".join(current))
+    return parts
+
+
+def _md_chunks(text: str, limit: int = 1900) -> list[str]:
+    """Split a matchup report on `---` section separators, fence tables, then greedily pack."""
+    sections = text.split("\n---\n")
+    fenced = [_fence_tables(s.strip()) for s in sections if s.strip()]
+
+    expanded: list[str] = []
+    for sec in fenced:
+        expanded.extend(_split_by_subsection(sec, limit))
+
+    chunks: list[str] = []
+    current = ""
+    for sec in expanded:
+        candidate = sec if not current else f"{current}\n\n---\n\n{sec}"
+        if len(candidate) <= limit:
+            current = candidate
+        else:
+            if current:
+                chunks.append(current)
+            current = sec
+    if current:
+        chunks.append(current)
     return chunks
 
 
@@ -236,13 +281,45 @@ def post_model_output(
         logger.warning("Discord model output failed (non-fatal): %s", exc)
         return
 
+    from ironclad.notifications.formatters import (
+        format_team_comparison_block,
+        format_top_edges_block,
+    )
+
+    # Team-comparison block (season-to-date side-by-side stats)
+    if season and home_team and away_team:
+        try:
+            from ironclad.store.connection import get_connection
+            block = format_team_comparison_block(
+                get_connection(read_only=True), home_team, away_team, season,
+            )
+            if block:
+                _send_content(url, f"```\n{block}\n```", game_id)
+        except Exception as exc:
+            logger.warning("Team-comparison block failed for %s: %s", game_id, exc)
+
+    # Top-edges block (full top-10)
+    if top_edges_df is not None and not top_edges_df.empty:
+        try:
+            block = format_top_edges_block(top_edges_df, limit=10)
+            _send_content(url, f"```\n{block}\n```", game_id)
+        except Exception as exc:
+            logger.warning("Top-edges block failed for %s: %s", game_id, exc)
+
     # Send full report as inline chat messages (chunked to stay under Discord's 2000-char limit)
     for chunk in _md_chunks(report_md):
-        try:
-            resp = requests.post(url, json={"content": chunk}, timeout=10)
-            resp.raise_for_status()
-        except Exception as exc:
-            logger.warning("Discord report chunk failed for %s: %s", game_id, exc)
+        if not _send_content(url, chunk, game_id):
             break
 
     logger.info("Discord model output posted for %s", game_id)
+
+
+def _send_content(url: str, content: str, game_id: str) -> bool:
+    """POST a content message; return False on error."""
+    try:
+        resp = requests.post(url, json={"content": content}, timeout=10)
+        resp.raise_for_status()
+        return True
+    except Exception as exc:
+        logger.warning("Discord message failed for %s: %s", game_id, exc)
+        return False
