@@ -44,7 +44,12 @@ class PBPIngestor(BaseIngestor):
         total = 0
         for season in seasons:
             logger.info("Fetching PBP for season %d", season)
-            raw = nfl.import_pbp_data([season], downcast=True)
+            # include_participation=False: nflverse discontinued the
+            # pbp_participation_{year}.parquet files (they now 404), and
+            # nfl_data_py's download handler references an undefined `Error`
+            # name — so a failed participation fetch surfaces as a bogus
+            # NameError. We don't use participation columns anyway.
+            raw = nfl.import_pbp_data([season], downcast=True, include_participation=False)
             df = _clean(raw)
             n = self._writer.write_play_by_play(df)
             logger.info("Season %d: wrote %d PBP rows", season, n)
