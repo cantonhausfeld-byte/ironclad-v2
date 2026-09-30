@@ -1,4 +1,4 @@
-"""Ingest nfl_data_py player ID crosswalk (gsis_id ↔ pfr_id, espn_id, etc.)."""
+"""Ingest the DynastyProcess player ID crosswalk (gsis_id ↔ pfr_id, espn_id, etc.)."""
 from __future__ import annotations
 
 import logging
@@ -9,6 +9,10 @@ from ironclad.ingest.base import BaseIngestor, _safe_select
 from ironclad.store.writer import BronzeWriter
 
 logger = logging.getLogger(__name__)
+
+# Same file nfl_data_py.import_ids() read; nflreadpy.load_ff_playerids() uses a
+# github.com/.../raw redirect that some proxies block.
+PLAYER_IDS_URL = "https://raw.githubusercontent.com/dynastyprocess/data/master/files/db_playerids.csv"
 
 _KEEP = [
     "gsis_id", "pfr_id", "nfl_id", "espn_id",
@@ -31,9 +35,8 @@ class PlayerIDIngestor(BaseIngestor):
         self._writer = writer or BronzeWriter()
 
     def _ingest(self) -> int:
-        import nfl_data_py as nfl
-        logger.info("Fetching player ID crosswalk via nfl_data_py.import_ids()")
-        raw = nfl.import_ids()
+        logger.info("Fetching player ID crosswalk from %s", PLAYER_IDS_URL)
+        raw = pd.read_csv(PLAYER_IDS_URL)
         df = _clean_player_ids(raw)
         if df.empty:
             logger.warning("Player ID crosswalk returned empty DataFrame")

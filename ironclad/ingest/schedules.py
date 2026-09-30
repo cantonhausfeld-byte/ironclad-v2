@@ -1,9 +1,9 @@
-"""Ingest NFL schedules via nfl_data_py."""
+"""Ingest NFL schedules via nflreadpy (nflverse)."""
 from __future__ import annotations
 
 import logging
 
-import nfl_data_py as nfl
+import nflreadpy as nfl
 import pandas as pd
 
 from ironclad.ingest.base import BaseIngestor
@@ -27,7 +27,7 @@ class ScheduleIngestor(BaseIngestor):
 
     def _ingest(self, seasons: list[int]) -> int:
         logger.info("Fetching schedules for seasons %s", seasons)
-        raw = nfl.import_schedules(seasons)
+        raw = nfl.load_schedules(seasons).to_pandas()
         df = _clean(raw)
         n = self._writer.write_schedules(df)
         logger.info("Wrote %d schedule rows", n)

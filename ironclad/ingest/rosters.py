@@ -1,9 +1,9 @@
-"""Ingest weekly rosters via nfl_data_py."""
+"""Ingest weekly rosters via nflreadpy (nflverse)."""
 from __future__ import annotations
 
 import logging
 
-import nfl_data_py as nfl
+import nflreadpy as nfl
 import pandas as pd
 
 from ironclad.ingest.base import BaseIngestor, _safe_select
@@ -27,7 +27,7 @@ class RosterIngestor(BaseIngestor):
         frames = []
         for season in seasons:
             try:
-                raw = nfl.import_weekly_rosters([season])
+                raw = nfl.load_rosters_weekly([season]).to_pandas()
                 frames.append(_clean(raw))
             except Exception as exc:
                 logger.warning("Roster fetch failed for %d: %s", season, exc)
@@ -40,9 +40,15 @@ class RosterIngestor(BaseIngestor):
 
 
 def _clean(raw: pd.DataFrame) -> pd.DataFrame:
-    # Normalise depth_chart_position → depth_chart_pos regardless of source name
-    if "depth_chart_position" in raw.columns and "depth_chart_pos" not in raw.columns:
-        raw = raw.rename(columns={"depth_chart_position": "depth_chart_pos"})
+    # Normalise source column names (nflreadpy: gsis_id/full_name; nfl_data_py:
+    # player_id/player_name; depth_chart_position in both)
+    for src, dst in [
+        ("gsis_id", "player_id"),
+        ("full_name", "player_name"),
+        ("depth_chart_position", "depth_chart_pos"),
+    ]:
+        if src in raw.columns and dst not in raw.columns:
+            raw = raw.rename(columns={src: dst})
     df = _safe_select(raw, _KEEP)
     df = df.dropna(subset=["player_id", "team", "position"])
     df["player_id"] = df["player_id"].astype(str)

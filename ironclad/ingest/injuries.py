@@ -1,9 +1,9 @@
-"""Ingest injury reports via nfl_data_py."""
+"""Ingest injury reports via nflreadpy (nflverse)."""
 from __future__ import annotations
 
 import logging
 
-import nfl_data_py as nfl
+import nflreadpy as nfl
 import pandas as pd
 
 from ironclad.ingest.base import BaseIngestor, _safe_select
@@ -31,7 +31,7 @@ class InjuryIngestor(BaseIngestor):
 
     def _ingest(self, seasons: list[int]) -> int:
         logger.info("Fetching injuries for seasons %s", seasons)
-        raw = nfl.import_injuries(seasons)
+        raw = nfl.load_injuries(seasons).to_pandas()
         df = _clean(raw)
         n = self._writer.write_injuries(df)
         logger.info("Wrote %d injury rows", n)
