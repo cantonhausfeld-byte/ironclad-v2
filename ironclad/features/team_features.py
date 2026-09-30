@@ -6,7 +6,13 @@ from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 
-from ironclad.config import FEATURE_VERSION, LEAGUE_PRIORS, ROLLING_WINDOW
+from ironclad.config import (
+    FEATURE_VERSION,
+    KNOWLEDGE_CUTOFF_MARGIN_MINUTES,
+    LEAGUE_PRIORS,
+    NFL_TZ,
+    ROLLING_WINDOW,
+)
 from ironclad.features.snapshot import FeatureSnapshot
 from ironclad.features.utils import safe_divide
 from ironclad.store.writer import GoldWriter
@@ -74,7 +80,10 @@ class TeamFeatureBuilder:
         total = 0
         for _, g in games.iterrows():
             try:
-                game_cutoff = _parse_kickoff(g["gameday"], g.get("gametime_local")) if cutoff_ts is None else cutoff_ts
+                game_cutoff = cutoff_ts or (
+                    _parse_kickoff(g["gameday"], g.get("gametime_local"))
+                    - timedelta(minutes=KNOWLEDGE_CUTOFF_MARGIN_MINUTES)
+                )
                 df = self.build_for_game(g["game_id"], game_cutoff)
                 if not df.empty:
                     total += 1
@@ -299,12 +308,14 @@ def _surface_grass(surface) -> bool | None:
 
 
 def _parse_kickoff(gameday, gametime_local) -> datetime:
-    day = pd.to_datetime(gameday)
+    """Kickoff in UTC. nflverse gameday/gametime are US Eastern (DST-aware)."""
+    day = pd.to_datetime(gameday).to_pydatetime()
+    hour, minute = 13, 0  # default: Sunday 1pm ET
     if gametime_local and isinstance(gametime_local, str):
         try:
             h, m = gametime_local.split(":")
-            dt = day + timedelta(hours=int(h), minutes=int(m)) + timedelta(hours=5)
-            return dt.replace(tzinfo=timezone.utc)
-        except Exception:
+            hour, minute = int(h), int(m)
+        except ValueError:
             pass
-    return (day + timedelta(hours=17)).replace(tzinfo=timezone.utc)
+    local = day.replace(hour=hour, minute=minute, tzinfo=NFL_TZ)
+    return local.astimezone(timezone.utc)

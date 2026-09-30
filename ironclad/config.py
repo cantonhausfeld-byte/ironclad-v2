@@ -6,6 +6,7 @@ import logging
 import os
 from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 
@@ -30,6 +31,8 @@ DISCORD_WEBHOOK_URL: str = os.environ.get("DISCORD_WEBHOOK_URL", "")
 # ── Simulation defaults ────────────────────────────────────────────────────────
 DEFAULT_N_DRAWS = 5000
 KNOWLEDGE_CUTOFF_MARGIN_MINUTES = 30  # minutes before kickoff
+# nflverse gameday/gametime are US Eastern; cutoff dates are compared in this zone
+NFL_TZ = ZoneInfo("America/New_York")
 
 # ── League-average priors (used when rolling history is sparse) ────────────────
 LEAGUE_HOME_WIN_PROB = 0.573

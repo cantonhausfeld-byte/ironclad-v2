@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import duckdb
 import pandas as pd
 
+from ironclad.config import NFL_TZ
 from ironclad.features.elo import INITIAL_ELO, compute_ratings
 from ironclad.store.reader import SnapshotReader
 
@@ -40,11 +41,16 @@ class FeatureSnapshot:
         games["gameday"] = pd.to_datetime(games["gameday"])
         return games
 
+    @property
+    def _cutoff_day(self):
+        """Cutoff as a calendar date in the schedule's time zone (US Eastern)."""
+        return self.cutoff_ts.astimezone(NFL_TZ).date()
+
     def _past_game_ids(self) -> pd.Series:
-        """game_ids whose gameday is strictly before the cutoff date."""
+        """game_ids whose gameday is strictly before the cutoff date (US Eastern)."""
         if self._past_ids is None:
             games = self._games()
-            self._past_ids = games[games["gameday"].dt.date < self.cutoff_ts.date()]["game_id"]
+            self._past_ids = games[games["gameday"].dt.date < self._cutoff_day]["game_id"]
         return self._past_ids
 
     def team_recent_games(self, team: str, n: int = 4) -> pd.DataFrame:
@@ -94,10 +100,16 @@ class FeatureSnapshot:
     # ── NGS tracking data ────────────────────────────────────────────────────
 
     def _past_week_pairs(self) -> pd.DataFrame:
-        """DataFrame of (season, week) int pairs for completed games before cutoff."""
+        """(season, week) pairs whose games were all played before the cutoff date.
+
+        Weekly tables (NGS) have one row per player-week, so a week only counts
+        once every game in it is done — otherwise a Sunday game would see its
+        own week's row as soon as Thursday's game was played.
+        """
         games = self._games()
-        past = games[games["gameday"].dt.date < self.cutoff_ts.date()][["season", "week"]]
-        return past.drop_duplicates().astype({"season": int, "week": int})
+        last_day = games.groupby(["season", "week"])["gameday"].max().dt.date
+        past = last_day[last_day < self._cutoff_day].reset_index()[["season", "week"]]
+        return past.astype({"season": int, "week": int})
 
     def player_ngs_receiving(self, player_id: str, n: int = 4) -> pd.DataFrame:
         """Last n NGS receiving rows for player from completed games before cutoff."""

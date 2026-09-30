@@ -86,3 +86,42 @@ def test_cutoff_before_all_games_includes_none(cutoff_db):
     snap = FeatureSnapshot(early, cutoff_db)
     assert snap.team_recent_games("AAA", n=4).empty
     assert snap.player_recent_games("P1", n=4).empty
+
+
+# ── Night games and weekly (season, week) tables ──────────────────────────────
+#
+# nflverse gamedays and kickoff times are US Eastern. An 8:20pm ET Sunday game
+# is past midnight UTC, so comparing gamedays against the cutoff's UTC date
+# treated the game being predicted (and every other same-day game) as played.
+
+def test_kickoff_parse_handles_daylight_saving():
+    from ironclad.features.team_features import _parse_kickoff
+    # 1:00pm EDT (UTC-4) in September, 1:00pm EST (UTC-5) in December
+    assert _parse_kickoff("2024-09-22", "13:00") == datetime(2024, 9, 22, 17, 0, tzinfo=timezone.utc)
+    assert _parse_kickoff("2024-12-22", "13:00") == datetime(2024, 12, 22, 18, 0, tzinfo=timezone.utc)
+
+
+def test_night_game_does_not_see_itself(cutoff_db):
+    from datetime import timedelta
+
+    from ironclad.config import KNOWLEDGE_CUTOFF_MARGIN_MINUTES
+    from ironclad.features.team_features import _parse_kickoff
+
+    for gametime in ("20:20", "20:40"):
+        cutoff = _parse_kickoff("2024-09-22", gametime) - timedelta(
+            minutes=KNOWLEDGE_CUTOFF_MARGIN_MINUTES
+        )
+        snap = FeatureSnapshot(cutoff, cutoff_db)
+        assert "2024_03_BBB_AAA" not in set(snap._past_game_ids()), gametime
+        assert list(snap.team_recent_games("AAA")["game_id"]) == ["2024_01_BBB_AAA"]
+
+
+def test_week_counts_as_past_only_when_all_its_games_are_played(conn):
+    # Week 3: Thursday game on 9/19, Sunday game on 9/22
+    _add_game(conn, "2024_03_CCC_DDD", 2024, 3, "2024-09-19", "DDD", "CCC")
+    _add_game(conn, "2024_03_BBB_AAA", 2024, 3, "2024-09-22", "AAA", "BBB")
+    _add_game(conn, "2024_02_BBB_AAA", 2024, 2, "2024-09-15", "AAA", "BBB")
+
+    sunday_cutoff = datetime(2024, 9, 22, 16, 30, tzinfo=timezone.utc)
+    weeks = FeatureSnapshot(sunday_cutoff, conn)._past_week_pairs()
+    assert sorted(map(tuple, weeks.values.tolist())) == [(2024, 2)]
