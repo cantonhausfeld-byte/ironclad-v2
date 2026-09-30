@@ -33,7 +33,7 @@ class GameOutcomeEnsemble(BaseModel):
     version = "v1.0"
 
     def __init__(self) -> None:
-        self._meta = LogisticRegression(C=1.0, solver="lbfgs", max_iter=1000, penalty="l2")
+        self._meta = LogisticRegression(C=1.0, solver="lbfgs", max_iter=1000)
         self._calibrator = PlattCalibrator()
         self._xgb: GameOutcomeModel | None = None
         self._lgbm: GameOutcomeLGBM | None = None

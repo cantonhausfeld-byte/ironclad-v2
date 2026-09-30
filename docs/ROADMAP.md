@@ -31,8 +31,8 @@ v1.0 is done when all of these hold:
 
 - [x] 0.1 Fix the 5 CI-scope lint errors so CI goes green.
 - [x] 0.2 Clean up lint in `tests/` and extend the CI lint step to `tests/`.
-- [ ] 0.3 Add a `README.md`: what it is, setup, `.env`, first-run commands, and weekly ops.
-- [ ] 0.4 Silence the sklearn `penalty` deprecation in `ensemble.py`, since it breaks in sklearn 1.10.
+- [x] 0.3 Add a `README.md`: what it is, setup, `.env`, first-run commands, and weekly ops.
+- [x] 0.4 Silence the sklearn `penalty` deprecation in `ensemble.py`, since it breaks in sklearn 1.10.
 
 ## Phase 1 — Get the 2026 season running (this week; week 4 kicks off Oct 1–5)
 
