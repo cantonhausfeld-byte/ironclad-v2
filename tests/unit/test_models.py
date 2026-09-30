@@ -169,3 +169,61 @@ def test_calibrator_passthrough_when_unfitted():
     probs = np.array([0.4, 0.6])
     out = cal.transform(probs)
     assert (out == probs).all()
+
+
+# ── Per-week breakdown ────────────────────────────────────────────────────────
+
+def _make_eval_frames(n: int = 40, seed: int = 42):
+    """Minimal X_val / y_val with home_week column for breakdown testing."""
+    rng = np.random.default_rng(seed)
+    X = pd.DataFrame({"home_week": [(i % 18) + 1 for i in range(n)]})
+    y = pd.DataFrame({
+        "home_win": [i % 2 for i in range(n)],
+        "home_margin": rng.normal(0, 10, size=n).tolist(),
+        "total_score": rng.normal(45, 8, size=n).tolist(),
+    })
+    return X, y
+
+
+def _fitted_model():
+    model = GameOutcomeModel()
+    X_train, y_train = _make_eval_frames(n=60, seed=0)
+    model.fit(X_train, y_train)
+    return model
+
+
+def test_breakdown_by_week_structure(conn):
+    from ironclad.models.trainer import ModelTrainer
+    X_val, y_val = _make_eval_frames(n=40, seed=99)
+    metrics = ModelTrainer(conn)._eval_game_outcome(
+        _fitted_model(), X_val, y_val, breakdown_by_week=True,
+    )
+
+    assert metrics["by_week"]
+    weeks = [row["week"] for row in metrics["by_week"]]
+    assert weeks == sorted(weeks)
+    for row in metrics["by_week"]:
+        assert {"week", "n_games", "log_loss", "margin_mae", "margin_bias"} <= row.keys()
+        assert isinstance(row["week"], int)
+        assert row["n_games"] >= 2
+        assert row["margin_mae"] >= 0.0
+        assert row["log_loss"] > 0.0
+
+
+def test_breakdown_by_week_absent_without_flag(conn):
+    from ironclad.models.trainer import ModelTrainer
+    X_val, y_val = _make_eval_frames(n=40, seed=99)
+    metrics = ModelTrainer(conn)._eval_game_outcome(_fitted_model(), X_val, y_val)
+
+    assert "by_week" not in metrics
+    assert "val_log_loss" in metrics
+
+
+def test_breakdown_by_week_skips_single_game_weeks(conn):
+    from ironclad.models.trainer import ModelTrainer
+    # 18 games, one per week: every week is too small to score
+    X_val, y_val = _make_eval_frames(n=18, seed=7)
+    metrics = ModelTrainer(conn)._eval_game_outcome(
+        _fitted_model(), X_val, y_val, breakdown_by_week=True,
+    )
+    assert metrics["by_week"] == []

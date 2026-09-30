@@ -245,6 +245,7 @@ class ModelTrainer:
         model: GameOutcomeModel,
         X_val: pd.DataFrame,
         y_val: pd.DataFrame,
+        breakdown_by_week: bool = False,
     ) -> dict:
         from ironclad.models.team.game_outcome import (
             CLF_FEATURES,
@@ -266,12 +267,20 @@ class ModelTrainer:
         margin_pred = model._reg_margin.predict(Xm_reg)
         total_pred = model._reg_total.predict(Xm_reg)
 
-        return {
+        result = {
             "val_log_loss": round(log_loss(labels, probs), 4),
             "val_brier": round(brier_score_loss(labels, probs), 4),
             "val_margin_mae": round(mean_absolute_error(y_val["home_margin"].values, margin_pred), 2),
             "val_total_mae": round(mean_absolute_error(y_val["total_score"].values, total_pred), 2),
         }
+
+        if breakdown_by_week and "home_week" in X_val.columns:
+            result["by_week"] = _week_breakdown(
+                X_val["home_week"].values, labels, probs,
+                y_val["home_margin"].values, margin_pred,
+            )
+
+        return result
 
     def train_bias_corrector(self) -> dict[str, Any]:
         """Fit TeamBiasCorrector from gold.backtest_predictions. Requires prior backtest run."""
@@ -339,7 +348,9 @@ class ModelTrainer:
         logger.info("GameOutcomeEnsemble saved. Metrics: %s", metrics)
         return metrics
 
-    def evaluate(self, val_seasons: list[int]) -> dict[str, Any]:
+    def evaluate(
+        self, val_seasons: list[int], breakdown_by_week: bool = False,
+    ) -> dict[str, Any]:
         """Evaluate all trained models on held-out seasons."""
         X_val, y_val = self._load_team_data(val_seasons)
         if X_val.empty:
@@ -347,7 +358,9 @@ class ModelTrainer:
 
         try:
             model = self._registry.load("game_outcome")
-            metrics = self._eval_game_outcome(model, X_val, y_val)
+            metrics = self._eval_game_outcome(
+                model, X_val, y_val, breakdown_by_week=breakdown_by_week,
+            )
             logger.info("Evaluation metrics: %s", metrics)
             return metrics
         except FileNotFoundError:
@@ -360,3 +373,29 @@ def _safe_mae(actual: pd.Series, baseline_pred: float) -> float:
     if not mask.any():
         return float("nan")
     return float(mean_absolute_error(actual[mask], np.full(mask.sum(), baseline_pred)))
+
+
+def _week_breakdown(
+    weeks, labels, probs, margin_actual, margin_pred,
+) -> list[dict[str, Any]]:
+    """Per-week log-loss, margin MAE and margin bias (weeks with < 2 games skipped)."""
+    df = pd.DataFrame({
+        "week": weeks,
+        "win": labels,
+        "prob": probs,
+        "margin_actual": margin_actual,
+        "margin_pred": margin_pred,
+    })
+    rows = []
+    for week, g in df.groupby("week"):
+        if len(g) < 2:
+            continue
+        err = g["margin_pred"] - g["margin_actual"]
+        rows.append({
+            "week": int(week),
+            "n_games": len(g),
+            "log_loss": round(float(log_loss(g["win"], g["prob"], labels=[0, 1])), 4),
+            "margin_mae": round(float(err.abs().mean()), 2),
+            "margin_bias": round(float(err.mean()), 2),
+        })
+    return rows

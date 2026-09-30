@@ -45,7 +45,7 @@ v1.0 is done when all of these hold:
 
 Port each item separately. Keep a feature only if walk-forward log-loss and the profitability harness don't get worse (main has since been recalibrated and decoupled from Vegas, so earlier gains need re-proving).
 
-- [ ] 2.1 Port `evaluate --breakdown-by-week` (no model impact, easy win).
+- [x] 2.1 Port `evaluate --breakdown-by-week` (no model impact, easy win).
 - [ ] 2.2 Port walk-forward `evaluate` (`--walk-forward --wf-start --wf-end`) so every later item has a common yardstick.
 - [ ] 2.3 Record the **baseline** on main: 2019–2025 walk-forward, game and prop metrics, and profitability. Check it into `docs/metrics/`.
 - [ ] 2.4 Elo ratings (`features/elo.py`, `elo_diff`, `home/away_elo_pre_game`).
