@@ -59,7 +59,8 @@ Port each item separately. Keep a feature only if walk-forward log-loss and the 
 
 ## Phase 3 — Data-source durability (1 week)
 
-- [ ] 3.1 Migrate the remaining `nfl_data_py` users (schedules, PBP, rosters, injuries, depth charts, player IDs, `silver.py`, `normalization.py`, `usage.py`) to `nflreadpy`. Then drop the `nfl_data_py` dependency.
+- [x] 3.1 Migrated every ingestor to `nflreadpy` and dropped `nfl-data-py`. Verified identical output on 2025 (old vs new code, fresh DBs).
+- [x] 3.1b Depth charts: nflverse's 2025+ daily-snapshot format is now parsed (cutoff-safe week assignment, per-slot depth). This also fixes a mixed-schema load that had wiped **all** seasons' depth charts in any backfill that included 2025+.
 - [ ] 3.2 Add a contract test per ingestor: a recorded small fixture checks the column names and types we depend on, so upstream renames fail loudly.
 - [ ] 3.3 Make the injury and depth-chart feeds mid-week aware (Wed/Thu/Fri practice reports → final Friday designation). Make sure the Bernoulli availability gate uses the latest status before cutoff.
 - [ ] 3.4 Handle in-season edge cases: flexed/rescheduled games, international games (TZ + weather), and bye weeks in `schedule --once`.
@@ -76,7 +77,7 @@ Port each item separately. Keep a feature only if walk-forward log-loss and the 
 
 - [ ] 5.1 Pick a host (small VPS, home server, or a cloud VM) and run the scheduler via systemd (`deploy/ironclad-scheduler.service`) or Docker with the data volume mounted.
 - [ ] 5.2 Nightly DB backup (DuckDB `EXPORT DATABASE` or file copy after checkpoint), keeping 14 days.
-- [ ] 5.3 Failure alerting: any scheduler job exception → Discord with the traceback summary. Add a weekly "heartbeat" post, even when there are no edges.
+- [~] 5.3 Failure alerting: done — scheduler job exceptions post to Discord and retry at most 3×/week (previously silent, retried every 15 min and burned Odds API quota). Still to do: a weekly heartbeat post.
 - [ ] 5.4 Store model artifacts off-host (versioned). Pin the model used for each week's report in the DB.
 - [ ] 5.5 If the API is exposed, add API-key auth and rate limiting.
 

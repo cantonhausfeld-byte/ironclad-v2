@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from ironclad.workflow.scheduler import (
     WeeklyScheduler,
@@ -190,3 +190,71 @@ def test_end_of_season_retrain_not_before_day_10(tmp_path, monkeypatch):
         _make_scheduler().run_once()
 
     assert not (tmp_path / "state.json").exists()
+
+
+# ── Failure handling ──────────────────────────────────────────────────────────
+
+def _tick_wednesday(state_file, run_pre_game, monkeypatch):
+    monkeypatch.setattr("ironclad.workflow.scheduler._STATE_FILE", state_file)
+    with (
+        patch("ironclad.workflow.scheduler.detect_upcoming_week", return_value=(2025, 1)),
+        patch("ironclad.workflow.scheduler.run_pre_game", run_pre_game),
+        patch("ironclad.workflow.scheduler.datetime") as mock_dt,
+        patch("ironclad.notifications.discord.post_job_failure") as alert,
+        patch("ironclad.notifications.discord.post_run_summary") as summary,
+    ):
+        mock_dt.now.return_value = datetime(2025, 9, 10, 10, 0)
+        result = _make_scheduler(dry_run=False).run_once()
+    return result, alert, summary
+
+
+def test_failing_job_alerts_and_gives_up_after_max_attempts(tmp_path, monkeypatch):
+    import json
+
+    from ironclad.workflow.scheduler import _MAX_ATTEMPTS
+
+    state_file = tmp_path / "state.json"
+    boom = MagicMock(side_effect=RuntimeError("odds API down"))
+
+    for attempt in range(1, _MAX_ATTEMPTS + 1):
+        result, alert, summary = _tick_wednesday(state_file, boom, monkeypatch)
+        assert result == {}
+        alert.assert_called_once()
+        assert alert.call_args.args[0] == "pre-game run"
+        assert alert.call_args.args[2:] == (attempt, _MAX_ATTEMPTS)
+        summary.assert_not_called()
+
+    state = json.loads(state_file.read_text())
+    pre_key = next(k for k in state if k.startswith("pre_game_") and not k.endswith("_attempts"))
+    assert state[pre_key] == "failed"
+
+    # No further attempts this week
+    _, alert, _ = _tick_wednesday(state_file, boom, monkeypatch)
+    assert boom.call_count == _MAX_ATTEMPTS
+    alert.assert_not_called()
+
+
+def test_successful_job_marks_done_and_posts_summary(tmp_path, monkeypatch):
+    import json
+
+    state_file = tmp_path / "state.json"
+    ok = MagicMock(return_value={"games": 16})
+    result, alert, summary = _tick_wednesday(state_file, ok, monkeypatch)
+
+    assert result == {"pre_game": {"games": 16}}
+    summary.assert_called_once_with({"games": 16})
+    alert.assert_not_called()
+    state = json.loads(state_file.read_text())
+    assert any(k.startswith("pre_game_") and v == "done" for k, v in state.items())
+
+
+def test_job_recovers_after_one_failure(tmp_path, monkeypatch):
+    state_file = tmp_path / "state.json"
+    flaky = MagicMock(side_effect=[RuntimeError("timeout"), {"games": 16}])
+
+    _tick_wednesday(state_file, flaky, monkeypatch)
+    result, alert, summary = _tick_wednesday(state_file, flaky, monkeypatch)
+
+    assert result == {"pre_game": {"games": 16}}
+    alert.assert_not_called()
+    summary.assert_called_once()

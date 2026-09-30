@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 _GREEN  = 3066993
 _YELLOW = 16776960
 _BLUE   = 3447003
+_RED    = 15158332
 
 
 def post_run_summary(result: dict, conn=None) -> None:
@@ -114,6 +115,35 @@ def post_backfill_summary(result: dict) -> None:
         logger.info("Discord backfill notification sent")
     except Exception as exc:
         logger.warning("Discord notification failed (non-fatal): %s", exc)
+
+
+def post_job_failure(job: str, exc: BaseException, attempt: int, max_attempts: int) -> None:
+    """POST a scheduler job failure to Discord. No-ops if URL not configured."""
+    url = config.DISCORD_WEBHOOK_URL
+    if not url:
+        logger.debug("DISCORD_WEBHOOK_URL not set; skipping notification")
+        return
+
+    final = attempt >= max_attempts
+    status = (
+        f"Attempt {attempt}/{max_attempts} — giving up until next week; needs a manual run."
+        if final else
+        f"Attempt {attempt}/{max_attempts} — will retry at the next scheduler poll."
+    )
+    payload = {
+        "embeds": [{
+            "title": f"\U0001f6a8 ironclad — {job} failed",
+            "color": _RED,
+            "description": f"{status}\n```\n{type(exc).__name__}: {str(exc)[:1500]}\n```",
+        }]
+    }
+
+    try:
+        resp = requests.post(url, json=payload, timeout=10)
+        resp.raise_for_status()
+        logger.info("Discord failure notification sent")
+    except Exception as post_exc:
+        logger.warning("Discord notification failed (non-fatal): %s", post_exc)
 
 
 def post_retrain_summary(result: dict) -> None:

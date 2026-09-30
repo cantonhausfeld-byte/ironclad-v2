@@ -32,6 +32,10 @@ _POST_GAME_HOUR = 6   # Tuesday 6 am
 # How often the scheduler wakes to check (seconds)
 _POLL_INTERVAL_SECONDS = 60 * 15  # 15 minutes
 
+# A failing job is retried at later polls, at most this many times per week
+# (each pre-game attempt spends Odds API quota)
+_MAX_ATTEMPTS = 3
+
 # End-of-season retrain fires in February on or after this day
 _RETRAIN_DAY = 10  # Feb 10 — Super Bowl is always before this
 
@@ -50,6 +54,11 @@ def _load_state() -> dict:
 def _save_state(state: dict) -> None:
     _STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     _STATE_FILE.write_text(json.dumps(state, indent=2))
+
+
+def _is_settled(state: dict, key: str) -> bool:
+    """True once a job has succeeded or used up its retries."""
+    return state.get(key) in ("done", "failed")
 
 
 def _iso_week_key(dt: date) -> str:
@@ -187,6 +196,40 @@ class WeeklyScheduler:
                 logger.error("Scheduler tick failed: %s", exc, exc_info=True)
             time.sleep(self.poll_interval)
 
+    def _attempt(self, state: dict, key: str, label: str, job, on_success) -> dict | None:
+        """Run a due job once; record the outcome in state and alert on failure.
+
+        The attempt counter is saved before the job runs, so a job that kills the
+        process still counts. After _MAX_ATTEMPTS failures the job is marked
+        "failed" and not retried until its next scheduled slot.
+        """
+        if self.dry_run:
+            state[key] = "done"
+            _save_state(state)
+            return None
+
+        attempts_key = f"{key}_attempts"
+        attempt = int(state.get(attempts_key, 0)) + 1
+        state[attempts_key] = attempt
+        _save_state(state)
+
+        try:
+            r = job()
+        except Exception as exc:
+            logger.error("%s failed (attempt %d/%d): %s", label, attempt, _MAX_ATTEMPTS,
+                         exc, exc_info=True)
+            if attempt >= _MAX_ATTEMPTS:
+                state[key] = "failed"
+                _save_state(state)
+            from ironclad.notifications.discord import post_job_failure
+            post_job_failure(label, exc, attempt, _MAX_ATTEMPTS)
+            return None
+
+        state[key] = "done"
+        _save_state(state)
+        on_success(r)
+        return r
+
     def run_once(self) -> dict:
         """Single-shot: check if any job is due right now and run it."""
         return self._tick()
@@ -200,24 +243,25 @@ class WeeklyScheduler:
         if now.weekday() == _WEDNESDAY and now.hour >= _PRE_GAME_HOUR:
             week_key = _iso_week_key(now.date())
             pre_key = f"pre_game_{week_key}"
-            if state.get(pre_key) != "done":
+            if not _is_settled(state, pre_key):
                 upcoming = detect_upcoming_week()
                 if upcoming:
                     season, week = upcoming
                     logger.info("Pre-game job due: season=%d week=%d", season, week)
-                    if not self.dry_run:
-                        r = run_pre_game(
+                    from ironclad.notifications.discord import post_run_summary
+                    r = self._attempt(
+                        state, pre_key, "pre-game run",
+                        lambda: run_pre_game(
                             season=season,
                             week=week,
                             n_draws=self.n_draws,
                             kelly_fraction=self.kelly_fraction,
                             min_ev=self.min_ev,
-                        )
+                        ),
+                        post_run_summary,
+                    )
+                    if r is not None:
                         result["pre_game"] = r
-                        from ironclad.notifications.discord import post_run_summary
-                        post_run_summary(r)
-                    state[pre_key] = "done"
-                    _save_state(state)
                 else:
                     logger.info("Pre-game: no upcoming games found (off-season?)")
 
@@ -225,18 +269,19 @@ class WeeklyScheduler:
         if now.weekday() == _TUESDAY and now.hour >= _POST_GAME_HOUR:
             week_key = _iso_week_key(now.date())
             post_key = f"post_game_{week_key}"
-            if state.get(post_key) != "done":
+            if not _is_settled(state, post_key):
                 completed = detect_completed_week()
                 if completed:
                     season, _ = completed
                     logger.info("Post-game backfill due: season=%d", season)
-                    if not self.dry_run:
-                        r = run_post_game(season=season, n_draws=self.n_draws)
+                    from ironclad.notifications.discord import post_backfill_summary
+                    r = self._attempt(
+                        state, post_key, "post-game backfill",
+                        lambda: run_post_game(season=season, n_draws=self.n_draws),
+                        post_backfill_summary,
+                    )
+                    if r is not None:
                         result["post_game"] = r
-                        from ironclad.notifications.discord import post_backfill_summary
-                        post_backfill_summary(r)
-                    state[post_key] = "done"
-                    _save_state(state)
                 else:
                     logger.info("Post-game: no completed games found (pre-season?)")
 
@@ -244,17 +289,18 @@ class WeeklyScheduler:
         if now.month == 2 and now.day >= _RETRAIN_DAY:
             season = detect_nfl_season(now.date())  # Feb → previous calendar year's season
             retrain_key = f"retrain_{season}"
-            if state.get(retrain_key) != "done":
+            if not _is_settled(state, retrain_key):
                 upcoming = detect_upcoming_week()
                 if upcoming is None:
                     logger.info("End-of-season retrain due: season=%d", season)
-                    if not self.dry_run:
-                        r = run_end_of_season_retrain(season=season)
+                    from ironclad.notifications.discord import post_retrain_summary
+                    r = self._attempt(
+                        state, retrain_key, "end-of-season retrain",
+                        lambda: run_end_of_season_retrain(season=season),
+                        post_retrain_summary,
+                    )
+                    if r is not None:
                         result["retrain"] = r
-                        from ironclad.notifications.discord import post_retrain_summary
-                        post_retrain_summary(r)
-                    state[retrain_key] = "done"
-                    _save_state(state)
                 else:
                     logger.info(
                         "End-of-season retrain: upcoming games still found (%s), skipping",
