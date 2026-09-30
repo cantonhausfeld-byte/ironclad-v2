@@ -17,6 +17,7 @@ from ironclad.config import (
     LEAGUE_AVG_TOTAL,
     LEAGUE_HOME_WIN_PROB,
 )
+from ironclad.features.elo import INITIAL_ELO
 from ironclad.models.base import BaseModel
 from ironclad.models.calibration import PlattCalibrator
 
@@ -233,6 +234,14 @@ def _build_diff_features(X: pd.DataFrame) -> pd.DataFrame:
             out[diff_col] = X[feat_col].fillna(0)
         else:
             out[diff_col] = 0.0
+
+    # Elo: missing ratings mean "no history" (1500), not 0
+    if "home_elo_pre_game" in X.columns and "away_elo_pre_game" in X.columns:
+        out["elo_diff"] = (
+            X["home_elo_pre_game"].fillna(INITIAL_ELO) - X["away_elo_pre_game"].fillna(INITIAL_ELO)
+        )
+    else:
+        out["elo_diff"] = 0.0
 
     # Rest
     if "home_rest_days" not in out.columns:

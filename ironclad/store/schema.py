@@ -571,6 +571,7 @@ def _gold(conn: duckdb.DuckDBPyConnection) -> None:
         off_epa_per_play_std     FLOAT,
         def_epa_per_play_std     FLOAT,
         -- Context
+        elo_pre_game             FLOAT,
         rest_days                INTEGER,
         is_divisional            BOOLEAN,
         implied_total_from_odds  FLOAT,
@@ -819,6 +820,7 @@ _EXPECTED_COLS: dict[str, list[tuple[str, str]]] = {
         ("_silver_ts", "TIMESTAMPTZ DEFAULT NOW()"),
     ],
     "gold.team_game_features": [
+        ("elo_pre_game",                  "FLOAT"),
         ("off_pressure_rate_l4",          "FLOAT"),
         ("def_pressure_rate_allowed_l4",  "FLOAT"),
         ("off_blitz_rate_l4",             "FLOAT"),

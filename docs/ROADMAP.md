@@ -21,6 +21,7 @@ v1.0 is done when all of these hold:
   - Training: Optuna tuning + walk-forward `evaluate` for XGBoost, and `evaluate --breakdown-by-week`
   - Net effect: `TEAM_FEATURES` has 24 columns on main versus 46 on that branch.
   - The branches share no git history, so the PR can't be merged; the work has to be ported.
+- **Fixed 2026-09-30:** live game-outcome predictions were opponent-blind. `MonteCarloEngine` passed only the home team's row, so every `*_diff` feature was the home team's raw value. Any live report or edge made with a *trained* game model before `028ff06` is suspect; backtests were unaffected.
 - Data: 2026 nflverse schedule and play-by-play (PBP) data are reachable. `nfl_data_py` is deprecated upstream and already broke once (participation files). Several ingestors still use it; the rest use `nflreadpy`.
 - There's no README, no persistent host, no backfilled DB in the repo, and no recorded baseline metrics.
 
@@ -46,9 +47,9 @@ v1.0 is done when all of these hold:
 Port each item separately. Keep a feature only if walk-forward log-loss and the profitability harness don't get worse (main has since been recalibrated and decoupled from Vegas, so earlier gains need re-proving).
 
 - [x] 2.1 Port `evaluate --breakdown-by-week` (no model impact, easy win).
-- [ ] 2.2 Port walk-forward `evaluate` (`--walk-forward --wf-start --wf-end`) so every later item has a common yardstick.
+- [x] 2.2 ~~Port walk-forward `evaluate`~~ — superseded: main's `ironclad backtest` already does expanding-window walk-forward and persists predictions for `dashboard`/`profitability`. Use it as the yardstick.
 - [ ] 2.3 Record the **baseline** on main: 2019–2025 walk-forward, game and prop metrics, and profitability. Check it into `docs/metrics/`.
-- [ ] 2.4 Elo ratings (`features/elo.py`, `elo_diff`, `home/away_elo_pre_game`).
+- [~] 2.4 Elo ratings — computed through `FeatureSnapshot` (cutoff-safe, works for upcoming games), with home-field advantage + MOV autocorrelation fixes over the PR #1 version. `elo_pre_game` is in gold and `elo_diff` in `_build_diff_features`; **add to `TEAM_FEATURES` only if the backtest vs 2.3 baseline improves.**
 - [ ] 2.5 Season-to-date / red-zone EPA, post-bye, surface, turnover diff.
 - [ ] 2.6 Defense-side diffs (CPOE allowed, neutral-script EPA, early-down, third-down, sack rate, success rate).
 - [ ] 2.7 Momentum (L1 vs L4 EPA delta) and variance (`*_std`) features.

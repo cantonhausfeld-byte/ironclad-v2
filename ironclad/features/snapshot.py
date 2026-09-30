@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 import duckdb
 import pandas as pd
 
+from ironclad.features.elo import INITIAL_ELO, compute_ratings
 from ironclad.store.reader import SnapshotReader
 
 
@@ -23,6 +24,7 @@ class FeatureSnapshot:
         self.reader = SnapshotReader(cutoff_ts, conn)
         self._cache: dict[str, pd.DataFrame] = {}
         self._past_ids: pd.Series | None = None
+        self._elo: dict[int, dict[str, float]] = {}
 
     def _read_cached(self, table: str) -> pd.DataFrame:
         if table not in self._cache:
@@ -57,6 +59,14 @@ class FeatureSnapshot:
         df = self._read_cached("silver.team_game_stats")
         df = df[(df["team"] == team) & (df["season"] == season)].copy()
         return df[df["game_id"].isin(self._past_game_ids())]
+
+    def team_elo(self, team: str, season: int) -> float:
+        """Pre-game Elo for team, replaying only games completed before cutoff."""
+        if season not in self._elo:
+            games = self._games()
+            games = games[games["game_id"].isin(self._past_game_ids())]
+            self._elo[season] = compute_ratings(games, as_of_season=season)
+        return self._elo[season].get(team, INITIAL_ELO)
 
     # ── Player history ────────────────────────────────────────────────────────
 

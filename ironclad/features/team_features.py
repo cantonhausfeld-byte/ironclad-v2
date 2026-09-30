@@ -217,6 +217,7 @@ class TeamFeatureBuilder:
             "off_epa_per_play_std":   std("epa_per_play",   "off_epa_per_play"),
             "def_epa_per_play_std":   def_from_opp("epa_per_play",  "def_epa_per_play"),
             # Context
+            "elo_pre_game":           snap.team_elo(team, season),
             "rest_days":              rest_days,
             "is_divisional":          _is_divisional(game["home_team"], game["away_team"]),
             "implied_total_from_odds": float(implied_total) if pd.notna(implied_total) else None,
