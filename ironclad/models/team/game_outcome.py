@@ -188,6 +188,19 @@ class GameOutcomeModel(BaseModel):
         }
 
 
+def pivot_game_rows(home_df: pd.DataFrame, away_df: pd.DataFrame) -> pd.DataFrame:
+    """One row per game from per-team gold rows, with home_/away_ prefixed columns.
+
+    This is the model's input shape for both training and live prediction.
+    """
+    home = home_df.add_prefix("home_").rename(columns={"home_game_id": "game_id"})
+    away = away_df.add_prefix("away_").rename(columns={"away_game_id": "game_id"})
+    merged = home.merge(away, on="game_id", how="inner")
+    merged["home_opp_def_pass_epa_l4"] = merged.get("away_def_epa_per_play_l4", 0.0)
+    merged["away_opp_def_pass_epa_l4"] = merged.get("home_def_epa_per_play_l4", 0.0)
+    return merged
+
+
 def _build_diff_features(X: pd.DataFrame) -> pd.DataFrame:
     """Pivot wide: each row has home_ and away_ prefixed columns → compute diffs."""
     # If already pivoted (one row per game), just map directly
@@ -249,8 +262,10 @@ def _build_diff_features(X: pd.DataFrame) -> pd.DataFrame:
 
 
 def _col(X: pd.DataFrame, col: str, default: float | None) -> float | None:
-    if col in X.columns and not X[col].isna().all():
-        val = X[col].iloc[0]
-        if pd.notna(val):
-            return float(val)
+    """First-row value of col, or of home_{col} for pivoted game rows."""
+    for name in (col, f"home_{col}"):
+        if name in X.columns and not X[name].isna().all():
+            val = X[name].iloc[0]
+            if pd.notna(val):
+                return float(val)
     return default

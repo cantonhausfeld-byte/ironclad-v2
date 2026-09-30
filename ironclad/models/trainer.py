@@ -11,7 +11,7 @@ from sklearn.metrics import brier_score_loss, log_loss, mean_absolute_error
 from ironclad.models.player.efficiency import PlayerEfficiencyModel
 from ironclad.models.player.usage import PlayerUsageModel
 from ironclad.models.registry import ModelRegistry
-from ironclad.models.team.game_outcome import GameOutcomeModel
+from ironclad.models.team.game_outcome import GameOutcomeModel, pivot_game_rows
 from ironclad.models.team.score_env import ScoreEnvironmentModel
 from ironclad.store.connection import get_connection
 
@@ -138,15 +138,7 @@ class ModelTrainer:
         if home_df.empty or away_df.empty:
             return pd.DataFrame(), pd.DataFrame()
 
-        # Pivot: one row per game with home_ and away_ prefix
-        home_df = home_df.add_prefix("home_").rename(columns={"home_game_id": "game_id"})
-        away_df = away_df.add_prefix("away_").rename(columns={"away_game_id": "game_id"})
-
-        merged = home_df.merge(away_df, on="game_id", how="inner")
-
-        # Add opponent DEF EPA to home row
-        merged["home_opp_def_pass_epa_l4"] = merged.get("away_def_epa_per_play_l4", 0.0)
-        merged["away_opp_def_pass_epa_l4"] = merged.get("home_def_epa_per_play_l4", 0.0)
+        merged = pivot_game_rows(home_df, away_df)
 
         # Targets from silver.games
         games = self._conn.execute(f"""

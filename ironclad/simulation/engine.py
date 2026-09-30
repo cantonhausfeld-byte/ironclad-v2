@@ -11,7 +11,7 @@ from ironclad.models.bias_corrector import TeamBiasCorrector
 from ironclad.models.player.efficiency import PlayerEfficiencyModel
 from ironclad.models.player.usage import PlayerUsageModel
 from ironclad.models.registry import ModelRegistry
-from ironclad.models.team.game_outcome import GameOutcomeModel
+from ironclad.models.team.game_outcome import GameOutcomeModel, pivot_game_rows
 from ironclad.models.team.score_env import ScoreEnvironmentModel
 from ironclad.simulation.game_draw import GameDraw
 from ironclad.simulation.player_draw import PlayerContext, PlayerDraw, PlayerDrawResult
@@ -45,6 +45,24 @@ class MonteCarloEngine:
         self._eff_model = _try_load(registry, "player_efficiency", PlayerEfficiencyModel)
         self._bias_corrector: TeamBiasCorrector | None = _try_load_optional(registry, "team_bias")
 
+    def _predict_outcome(
+        self,
+        home_team: str,
+        away_team: str,
+        home_features: pd.DataFrame,
+        away_features: pd.DataFrame,
+    ) -> dict:
+        """Game outcome from the same one-row-per-game shape the model trains on."""
+        game_X = pivot_game_rows(home_features, away_features)
+        outcome = self._outcome_model.predict(game_X)
+        # Apply per-team bias correction to margin if corrector is available.
+        if self._bias_corrector is not None:
+            corrected = self._bias_corrector.correct(
+                home_team, away_team, outcome["home_margin_mean"]
+            )
+            outcome = {**outcome, "home_margin_mean": corrected}
+        return outcome
+
     def run(
         self,
         home_team: str,
@@ -57,13 +75,7 @@ class MonteCarloEngine:
         logger.info("Running %d Monte Carlo draws: %s vs %s", self.n_draws, home_team, away_team)
 
         # ── Model inference (deterministic, before simulation) ────────────────
-        home_outcome = self._outcome_model.predict(home_features)
-        # Apply per-team bias correction to margin if corrector is available.
-        if self._bias_corrector is not None:
-            corrected = self._bias_corrector.correct(
-                home_team, away_team, home_outcome["home_margin_mean"]
-            )
-            home_outcome = {**home_outcome, "home_margin_mean": corrected}
+        home_outcome = self._predict_outcome(home_team, away_team, home_features, away_features)
         home_env = self._env_model.predict(home_features)
         away_env = self._env_model.predict(away_features)
 
