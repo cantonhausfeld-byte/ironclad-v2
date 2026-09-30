@@ -22,6 +22,8 @@ v1.0 is done when all of these hold:
   - Net effect: `TEAM_FEATURES` has 24 columns on main versus 46 on that branch.
   - The branches share no git history, so the PR can't be merged; the work has to be ported.
 - **Fixed 2026-09-30:** live game-outcome predictions were opponent-blind. `MonteCarloEngine` passed only the home team's row, so every `*_diff` feature was the home team's raw value. Any live report or edge made with a *trained* game model before `028ff06` is suspect; backtests were unaffected.
+- **Fixed 2026-09-30:** knowledge-cutoff leaks (`9fe2c45`). Night games (SNF/MNF/TNF) could see their own result, because cutoff dates were compared in UTC. Sunday and Monday games could also see their own week's NGS rows. **Anything trained before this is optimistic: rebuild gold and retrain.**
+- **Fixed 2026-09-30:** the scheduler never alerted on failure and re-ran failed jobs every 15 minutes (`27cd556`).
 - Data: 2026 nflverse schedule and play-by-play (PBP) data are reachable. `nfl_data_py` is deprecated upstream and already broke once (participation files). Several ingestors still use it; the rest use `nflreadpy`.
 - There's no README, no persistent host, no backfilled DB in the repo, and no recorded baseline metrics.
 
@@ -37,6 +39,7 @@ v1.0 is done when all of these hold:
 ## Phase 1 — Get the 2026 season running (this week; week 4 kicks off Oct 1–5)
 
 - [ ] 1.1 Backfill 2016–2026 into a fresh `data/ironclad.ddb`. Record the row counts per table and season, and run `ironclad validate --season` on each.
+- [ ] 1.1b Rebuild with fixed code: re-ingest depth charts, rebuild silver `player_weekly_status`, and rebuild all gold team/player features. The first backfill ran the pre-fix code: it has leaks, no Elo and no depth charts.
 - [ ] 1.2 Train on 2016–2024 and validate on 2025. Save the model version and metrics.
 - [ ] 1.3 Generate week-4 reports (`ironclad run` dry run with no posting) and eyeball them for UNK positions, empty features, and absurd projections.
 - [ ] 1.4 Grade weeks 1–3 of 2026 retroactively (cutoff-honest) for a first live accuracy read.
