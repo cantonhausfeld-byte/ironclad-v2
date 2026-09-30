@@ -6,9 +6,8 @@ from datetime import datetime, timezone
 import pandas as pd
 import pytest
 
-from ironclad.features.team_features import _parse_kickoff, _is_divisional
-from ironclad.features.utils import safe_divide, completeness_score
-
+from ironclad.features.team_features import _is_divisional, _parse_kickoff
+from ironclad.features.utils import completeness_score, safe_divide
 
 # ── _is_divisional ────────────────────────────────────────────────────────────
 
@@ -58,25 +57,21 @@ def test_parse_kickoff_string_date():
 # ── safe_divide ────────────────────────────────────────────────────────────────
 
 def test_safe_divide_normal():
-    import pandas as pd
     result = safe_divide(pd.Series([10.0]), pd.Series([5.0]))
     assert float(result.iloc[0]) == pytest.approx(2.0)
 
 
 def test_safe_divide_zero_denominator_returns_default():
-    import pandas as pd
     result = safe_divide(pd.Series([5.0]), pd.Series([0.0]))
     assert float(result.iloc[0]) == pytest.approx(0.0)
 
 
 def test_safe_divide_custom_default():
-    import pandas as pd
     result = safe_divide(pd.Series([5.0]), pd.Series([0.0]), default=99.0)
     assert float(result.iloc[0]) == pytest.approx(99.0)
 
 
 def test_safe_divide_scalar_inputs():
-    import pandas as pd
     result = safe_divide(10.0, 2.0)
     assert float(result[0]) == pytest.approx(5.0)
 
@@ -84,19 +79,16 @@ def test_safe_divide_scalar_inputs():
 # ── completeness_score ─────────────────────────────────────────────────────────
 
 def test_completeness_all_present():
-    import pandas as pd
     s = pd.Series([1.0, 2.0, 3.0])
     assert completeness_score(s) == pytest.approx(1.0)
 
 
 def test_completeness_all_null():
-    import pandas as pd
     s = pd.Series([None, None, None])
     assert completeness_score(s) == pytest.approx(0.0)
 
 
 def test_completeness_partial():
-    import pandas as pd
     s = pd.Series([1.0, None, 3.0, None])
     score = completeness_score(s)
     assert score == pytest.approx(0.5)
@@ -106,9 +98,9 @@ def test_completeness_partial():
 
 def test_team_feature_builder_empty_game(tmp_path):
     """Builder returns empty DataFrame when game is not in silver."""
+    from ironclad.features.team_features import TeamFeatureBuilder
     from ironclad.store.connection import in_memory_connection
     from ironclad.store.schema import create_all_tables
-    from ironclad.features.team_features import TeamFeatureBuilder
 
     conn = in_memory_connection()
     create_all_tables(conn)

@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import pandas as pd
-import pytest
 
 from ironclad.ingest.player_ids import _clean_player_ids
 from ironclad.store.connection import in_memory_connection

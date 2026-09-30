@@ -6,7 +6,6 @@ from datetime import datetime, timezone
 import pytest
 
 from ironclad.store.data_quality import (
-    check_completeness_score,
     check_epa_range,
     check_null_rates,
     check_row_counts,

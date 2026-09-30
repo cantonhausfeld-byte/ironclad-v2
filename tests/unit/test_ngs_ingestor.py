@@ -4,12 +4,10 @@ from __future__ import annotations
 from datetime import date, datetime, timezone
 
 import pandas as pd
-import pytest
 
-from ironclad.ingest.ngs_stats import _clean_receiving, _clean_passing
+from ironclad.ingest.ngs_stats import _clean_passing, _clean_receiving
 from ironclad.store.connection import in_memory_connection
 from ironclad.store.schema import create_all_tables
-
 
 # ── _clean_receiving ──────────────────────────────────────────────────────────
 

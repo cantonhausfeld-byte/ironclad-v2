@@ -1,9 +1,9 @@
 """Tests for time-travel-safe SnapshotReader."""
 from datetime import datetime, timezone
-import pandas as pd
+
 from ironclad.store.connection import in_memory_connection
-from ironclad.store.schema import create_all_tables
 from ironclad.store.reader import SnapshotReader
+from ironclad.store.schema import create_all_tables
 
 
 def _seed_games(conn):

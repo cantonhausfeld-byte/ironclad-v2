@@ -12,7 +12,6 @@ from ironclad.store.silver import (
     _remove_vig,
 )
 
-
 # ── de-vig helpers ──────────────────────────────────────────────────────────
 
 def test_devig_even_market_is_half():

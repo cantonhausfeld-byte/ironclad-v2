@@ -2,13 +2,11 @@
 from __future__ import annotations
 
 import pandas as pd
-import pytest
 
 from ironclad.ingest.base import _safe_select
-from ironclad.ingest.rosters import _clean as roster_clean
 from ironclad.ingest.depth_charts import _clean as depth_clean
 from ironclad.ingest.injuries import _clean as injury_clean
-
+from ironclad.ingest.rosters import _clean as roster_clean
 
 # ── _safe_select ──────────────────────────────────────────────────────────────
 

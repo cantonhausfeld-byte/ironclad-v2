@@ -3,10 +3,9 @@ from __future__ import annotations
 
 import pytest
 
-from ironclad.betting.props import PropLine, load_prop_lines_from_db
+from ironclad.betting.props import load_prop_lines_from_db
 from ironclad.ingest.odds import _parse_game_odds, _resolve_game_id, _resolve_player
 from ironclad.store.normalization import full_name_to_abbr
-
 
 # ── OddsIngestor key guard ────────────────────────────────────────────────────
 

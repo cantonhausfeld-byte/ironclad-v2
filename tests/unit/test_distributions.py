@@ -1,11 +1,11 @@
 """Tests for Monte Carlo distribution helpers."""
 import numpy as np
-import pytest
+
 from ironclad.simulation.distributions import (
-    truncated_normal,
+    bernoulli,
     beta_from_mean_std,
     poisson_draw,
-    bernoulli,
+    truncated_normal,
 )
 
 

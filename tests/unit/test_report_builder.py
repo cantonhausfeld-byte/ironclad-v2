@@ -4,10 +4,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 import numpy as np
-import pytest
 
-from ironclad.simulation.results import SimulationResult, DrawRecord
 from ironclad.report.builder import build_report_context
+from ironclad.simulation.results import DrawRecord, SimulationResult
 
 
 def _make_result(n: int = 50, seed: int = 0) -> SimulationResult:

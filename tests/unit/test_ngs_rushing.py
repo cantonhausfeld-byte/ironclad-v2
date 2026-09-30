@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import pandas as pd
-import pytest
 
 from ironclad.ingest.ngs_stats import _clean_rushing
 from ironclad.store.connection import in_memory_connection

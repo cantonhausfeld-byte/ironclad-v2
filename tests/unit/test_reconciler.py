@@ -1,8 +1,8 @@
 """Tests for the Monte Carlo reconciler."""
 import numpy as np
-import pytest
+
 from ironclad.simulation.game_draw import GameDrawResult
-from ironclad.simulation.player_draw import PlayerDrawResult, PlayerContext
+from ironclad.simulation.player_draw import PlayerContext, PlayerDrawResult
 from ironclad.simulation.reconciler import Reconciler
 
 

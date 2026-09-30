@@ -96,7 +96,7 @@ def test_team_targets_filled():
 
     assert row["target_points_scored"] == pytest.approx(27.0)
     assert row["target_yards_total"] == pytest.approx(350.0)
-    assert row["target_home_win"] == True
+    assert row["target_home_win"] == True  # noqa: E712
     assert row["target_home_margin"] == 7        # 27 - 20
     assert row["target_total_score"] == 47       # 27 + 20
 

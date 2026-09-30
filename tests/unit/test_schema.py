@@ -1,5 +1,4 @@
 """Tests for DuckDB schema creation."""
-import pytest
 from ironclad.store.connection import in_memory_connection
 from ironclad.store.schema import create_all_tables
 

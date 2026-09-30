@@ -136,7 +136,7 @@ def test_player_features_weather_populated_from_game():
     row = df.iloc[0]
     assert row["temp_f"] == pytest.approx(28.0)
     assert row["wind_mph"] == pytest.approx(12.5)
-    assert row["is_dome"] == False
+    assert row["is_dome"] == False  # noqa: E712 (strict: None/NaN must fail)
     assert row["altitude_ft"] == 5280
 
 
@@ -144,9 +144,10 @@ def test_player_features_weather_populated_from_game():
 
 def test_supplement_from_roster_normalizes_team_code():
     """bronze.rosters may use 'LA' (Rams transition); roster lookup must normalize."""
+    from datetime import timezone
+
     from ironclad.features.player_features import _supplement_from_roster
     from ironclad.features.snapshot import FeatureSnapshot
-    from datetime import timezone
 
     conn = _conn()
     cutoff = datetime(2099, 1, 1, tzinfo=timezone.utc)

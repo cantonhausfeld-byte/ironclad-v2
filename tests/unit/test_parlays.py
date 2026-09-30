@@ -15,7 +15,6 @@ from ironclad.betting.parlays import (
 )
 from ironclad.simulation.results import DrawRecord, SimulationResult
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _stats(player_id: str = "P1", rec_yards: float = 0.0, rush_yards: float = 0.0,

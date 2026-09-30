@@ -4,8 +4,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from ironclad.eval.prop_backtester import PropBacktester, summarize, _STAT_MAP
-
+from ironclad.eval.prop_backtester import _STAT_MAP, PropBacktester, summarize
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -134,7 +133,6 @@ def test_summarize_returns_expected_columns():
 
 def test_backtest_filters_dnp_players(conn):
     """Players with null actual value are excluded from results."""
-    import pandas as pd
     from ironclad.store.schema import create_all_tables
 
     create_all_tables(conn)

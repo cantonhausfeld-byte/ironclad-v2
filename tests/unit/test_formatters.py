@@ -8,7 +8,6 @@ from ironclad.notifications.formatters import (
     format_top_edges_block,
 )
 
-
 # ── format_top_edges_block ────────────────────────────────────────────────────
 
 def test_top_edges_empty():

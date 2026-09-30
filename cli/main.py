@@ -772,7 +772,7 @@ def settle_week(season, week, units) -> None:
       ironclad settle-week --season 2025 --week 18
       ironclad results
     """
-    from ironclad.eval.performance_tracker import auto_settle_week, pnl_summary
+    from ironclad.eval.performance_tracker import auto_settle_week
     from ironclad.store.connection import get_connection
     from ironclad.store.schema import create_all_tables
     conn = get_connection()
@@ -834,7 +834,6 @@ def results(game_id) -> None:
 def status(check_odds_quota: bool) -> None:
     """Show data, model, and scheduler health summary."""
     import json
-    from datetime import date
     from pathlib import Path
 
     click.echo("\n=== ironclad-v2 status ===\n")

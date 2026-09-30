@@ -1,9 +1,7 @@
 """Tests for team name normalization."""
 import pandas as pd
-import pytest
 
-from ironclad.store.normalization import normalize_team, normalize_teams, TEAM_MAP
-
+from ironclad.store.normalization import TEAM_MAP, normalize_team, normalize_teams
 
 # ── normalize_team ─────────────────────────────────────────────────────────────
 

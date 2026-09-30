@@ -2,10 +2,8 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from ironclad.simulation.drive_sim import DriveSimulator
-from ironclad.simulation.game_draw import GameDrawResult
 
 
 def _make_env(team_total=23.5, pass_rate=0.55, total_plays=64):
@@ -121,8 +119,8 @@ def test_drive_sim_trailing_team_passes_more():
 # ── Test 5: engine uses DriveSimulator when flagged ──────────────────────────
 
 def test_engine_uses_drive_sim_when_flagged():
-    from ironclad.simulation.engine import MonteCarloEngine
     from ironclad.simulation.drive_sim import DriveSimulator
+    from ironclad.simulation.engine import MonteCarloEngine
 
     engine_default = MonteCarloEngine(n_draws=1, use_drive_sim=False)
     assert not isinstance(engine_default._game_draw, DriveSimulator)

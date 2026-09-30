@@ -3,9 +3,8 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-import pytest
 
-from ironclad.models.player.efficiency import PlayerEfficiencyModel, _EFFICIENCY_PRIORS
+from ironclad.models.player.efficiency import _EFFICIENCY_PRIORS, PlayerEfficiencyModel
 
 
 def _make_qb_df(n: int = 80, seed: int = 42) -> tuple[pd.DataFrame, pd.DataFrame]:

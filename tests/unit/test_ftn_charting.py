@@ -2,13 +2,11 @@
 from __future__ import annotations
 
 import pandas as pd
-import pytest
 
 from ironclad.ingest.ftn_charting import _clean_ftn_charting
 from ironclad.store.connection import in_memory_connection
 from ironclad.store.schema import create_all_tables
 from ironclad.store.silver import SilverTransformer
-from ironclad.store.writer import BronzeWriter
 
 
 def _make_raw_ftn(**kwargs):

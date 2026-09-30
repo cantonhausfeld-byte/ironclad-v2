@@ -1,10 +1,8 @@
 """Tests for betting intelligence: ev, kelly, props."""
 from __future__ import annotations
 
-import math
 from pathlib import Path
 
-import pandas as pd
 import pytest
 
 from ironclad.betting.ev import (
@@ -22,7 +20,6 @@ from ironclad.betting.kelly import (
 )
 from ironclad.betting.props import PropAnalyzer, PropLine, load_prop_lines
 from ironclad.simulation.results import DrawRecord, SimulationResult
-
 
 # ── Odds conversions ──────────────────────────────────────────────────────────
 

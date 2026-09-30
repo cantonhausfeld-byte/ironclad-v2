@@ -1,12 +1,15 @@
 """Unit tests for auto_settle_week() and the retroactive settlement loop."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 import pandas as pd
 import pytest
 
-from ironclad.eval.performance_tracker import auto_settle_week, load_results, pnl_summary, save_edges
+from ironclad.eval.performance_tracker import (
+    auto_settle_week,
+    load_results,
+    pnl_summary,
+    save_edges,
+)
 from ironclad.store.schema import create_all_tables
 
 

@@ -1,16 +1,16 @@
 """Tests for model stubs and registry."""
 import tempfile
 from pathlib import Path
-import pandas as pd
-import pytest
 
+import numpy as np
+import pandas as pd
+
+from ironclad.models.calibration import IsotonicCalibrator
+from ironclad.models.player.efficiency import PlayerEfficiencyModel
+from ironclad.models.player.usage import PlayerUsageModel, _infer_starter
+from ironclad.models.registry import ModelRegistry
 from ironclad.models.team.game_outcome import GameOutcomeModel
 from ironclad.models.team.score_env import ScoreEnvironmentModel
-from ironclad.models.player.usage import PlayerUsageModel, _infer_starter
-from ironclad.models.player.efficiency import PlayerEfficiencyModel
-from ironclad.models.registry import ModelRegistry
-from ironclad.models.calibration import IsotonicCalibrator
-import numpy as np
 
 
 def _team_row(home_win_prob=0.58, total=47.5, spread=-3.0):

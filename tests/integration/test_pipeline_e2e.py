@@ -64,7 +64,7 @@ def test_pbp_reg_filter():
 
 def test_reconciler_no_negative_yards():
     """200 simulation draws should produce no negative receiving or rush yards."""
-    from ironclad.simulation.player_draw import PlayerDraw, PlayerContext
+    from ironclad.simulation.player_draw import PlayerContext, PlayerDraw
 
     rng = np.random.default_rng(seed=0)
     ctx = PlayerContext(
@@ -103,7 +103,6 @@ def test_reconciler_no_negative_yards():
 
 def test_simulate_raises_on_empty_roster(conn):
     """MatchupWorkflow.simulate() should raise RuntimeError if player features are missing."""
-    import datetime
     from unittest.mock import patch
 
     conn.execute("""
@@ -133,7 +132,7 @@ def test_simulate_raises_on_empty_roster(conn):
 def test_prop_analyzer_no_skip_rows_in_output():
     """PropAnalyzer.analyze() must not return rows with side == 'skip'."""
     from unittest.mock import MagicMock
-    import numpy as np
+
     from ironclad.betting.props import PropAnalyzer, PropLine
 
     # Build a minimal fake SimulationResult._player_df

@@ -1,8 +1,6 @@
 """Tests for betting performance tracking (save, settle, P&L)."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 import pandas as pd
 import pytest
 
@@ -12,7 +10,6 @@ from ironclad.eval.performance_tracker import (
     save_edges,
     settle_bet,
 )
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -44,7 +41,7 @@ def _edges_df(n: int = 2) -> pd.DataFrame:
 
 def test_save_edges_inserts_rows(conn):
     df = _edges_df(3)
-    ids = save_edges(conn, "2024_14_LAC_KC", 1000, df)
+    save_edges(conn, "2024_14_LAC_KC", 1000, df)
     count = conn.execute("SELECT COUNT(*) FROM gold.betting_edges").fetchone()[0]
     assert count == 3
 

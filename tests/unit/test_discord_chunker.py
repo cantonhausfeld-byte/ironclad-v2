@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from ironclad.notifications.discord import _fence_tables, _md_chunks
 
-
 SAMPLE_REPORT = """# IRONCLAD MATCHUP REPORT
 ## CLE @ CIN
 ### Week 18

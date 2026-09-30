@@ -2,16 +2,13 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import patch
 
 from ironclad.workflow.scheduler import (
     WeeklyScheduler,
     _iso_week_key,
     detect_nfl_season,
 )
-
 
 # ── detect_nfl_season ─────────────────────────────────────────────────────────
 
@@ -127,7 +124,7 @@ def test_post_game_fires_on_tuesday(tmp_path, monkeypatch):
         patch("ironclad.workflow.scheduler.datetime") as mock_dt,
     ):
         mock_dt.now.return_value = tuesday_6am
-        result = _make_scheduler().run_once()
+        _make_scheduler().run_once()
 
     import json
     state = json.loads((tmp_path / "state.json").read_text())
@@ -147,7 +144,7 @@ def test_end_of_season_retrain_fires_in_february(tmp_path, monkeypatch):
         patch("ironclad.workflow.scheduler.datetime") as mock_dt,
     ):
         mock_dt.now.return_value = feb_15
-        result = _make_scheduler().run_once()
+        _make_scheduler().run_once()
 
     import json
     state = json.loads((tmp_path / "state.json").read_text())

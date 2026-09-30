@@ -2,11 +2,9 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from ironclad.simulation.game_draw import GameDraw, _apply_game_script
 from ironclad.simulation.player_draw import PlayerContext, PlayerDraw
-
 
 BASE_RATE = 0.58
 

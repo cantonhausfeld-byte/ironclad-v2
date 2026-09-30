@@ -1,13 +1,10 @@
 """Tests for TeamBiasCorrector and recency weight helper."""
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
-import pytest
 
 from ironclad.models.bias_corrector import TeamBiasCorrector
 from ironclad.models.team.game_outcome import _sample_weights
-
 
 # ── Recency weights ───────────────────────────────────────────────────────────
 

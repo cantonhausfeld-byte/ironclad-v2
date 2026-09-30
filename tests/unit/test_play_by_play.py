@@ -11,7 +11,7 @@ def _make_raw_pbp(season_types: list[str]) -> pd.DataFrame:
     n = len(season_types)
     return pd.DataFrame({
         "play_id":       [str(i) for i in range(n)],
-        "game_id":       [f"2024_01_KC_BUF"] * n,
+        "game_id":       ["2024_01_KC_BUF"] * n,
         "season":        [2024] * n,
         "week":          [1] * n,
         "season_type":   season_types,
