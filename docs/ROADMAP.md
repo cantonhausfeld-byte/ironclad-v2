@@ -52,7 +52,7 @@ Port each item separately. Keep a feature only if walk-forward log-loss and the 
 
 - [x] 2.1 Port `evaluate --breakdown-by-week` (no model impact, easy win).
 - [x] 2.2 ~~Port walk-forward `evaluate`~~ — superseded: main's `ironclad backtest` already does expanding-window walk-forward and persists predictions for `dashboard`/`profitability`. Use it as the yardstick.
-- [x] 2.3 Record the **baseline** → `docs/metrics/2026-10-01-game-model-baseline.md`. Brier 0.241 → 0.233 with Elo, vs Vegas 0.211; ATS 48.6%; ROI negative. on main: 2019–2025 walk-forward, game and prop metrics, and profitability. Check it into `docs/metrics/`.
+- [x] 2.3 Record the **baseline** → `docs/metrics/2026-10-01-game-model-baseline.md`. Brier 0.241 → 0.233 with Elo, vs Vegas 0.211; ATS 48.6%; ROI negative. (Prop metrics still to add.)
 - [x] 2.4 Elo ratings: shipped in `TEAM_FEATURES`. Brier 0.241 → 0.233 and log-loss 0.675 → 0.659. Elo **alone** scores 0.2225, better than the full model.
 - [ ] 2.4b **Model choice (owner decision):** replace or regularize the overfit 300-tree XGB classifier. Logistic regression + Elo scores 0.224 against XGB+Elo at 0.233; see the baseline doc.
 - [ ] 2.5 Season-to-date / red-zone EPA, post-bye, surface, turnover diff.
