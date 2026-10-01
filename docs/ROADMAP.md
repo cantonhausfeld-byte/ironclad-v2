@@ -73,6 +73,8 @@ Port each item separately. Keep a feature only if walk-forward log-loss and the 
 ## Phase 4 — Model validation and calibration (ongoing, 1–2 weeks initial)
 
 - [ ] 4.1 Game model: reliability diagrams and calibration error by probability bucket, and a comparison against the closing line (CLV).
+- [ ] 4.1b **QB TDs are under-predicted:** simulated mean 1.04 vs 1.29 actual, P(anytime) 0.49 vs 0.69 (2025 wks 10–11). Check `_QB_TD_PER_COMPLETION` and the completions volume.
+- [ ] 4.1c Report consistency: team pass yards, QB pass yards and summed receiver yards disagree (TEN@BAL wk4: 346 / 230 / ~306). Also the "Implied Spread" sign label and the kickoff time display.
 - [ ] 4.2 Props: 50/80/95% interval coverage by position and stat, with each within ±3 pts of nominal.
 - [ ] 4.3 Decision rule: set a minimum-edge threshold per market from backtest ROI. Suppress markets that don't clear it.
 - [ ] 4.4 Bankroll: cap Kelly fraction and exposure per week; build parlays only from markets that pass 4.3.

@@ -79,3 +79,47 @@ def test_rush_yards_scaled():
     game = _make_game(rush_yards=80.0)
     home_out, _ = rec.reconcile(game, players, [], ctxs, [], rng)
     assert abs(home_out[0].rush_yards - 80.0) < 1.0
+
+
+def _offense():
+    qb = _make_player("qb", pos="QB", rec_yards=0.0, targets=0, carries=4)
+    qb.pass_attempts, qb.completions = 34, 22
+    players = [
+        qb,
+        _make_player("rb", pos="RB", rec_yards=10.0, rush_yards=70.0, targets=3, carries=18),
+        _make_player("wr1", rec_yards=80.0, targets=9),
+        _make_player("wr2", rec_yards=50.0, targets=6),
+        _make_player("te", pos="TE", rec_yards=40.0, targets=5),
+    ]
+    ctxs = [_make_context(p.player_id, p.position) for p in players]
+    return players, ctxs
+
+
+def test_every_passing_td_is_credited_to_a_receiver():
+    rec = Reconciler()
+    for seed in range(200):
+        players, ctxs = _offense()
+        by_id = {p.player_id: p for p in players}
+        by_id["qb"].carries = 0      # QB tds == passing TDs
+        by_id["rb"].targets = 0      # RB tds == rushing TDs
+        home_out, _ = rec.reconcile(_make_game(home_score=31), players, [], ctxs, [],
+                                    np.random.default_rng(seed))
+        receiving = sum(p.tds for p in home_out if p.player_id in ("wr1", "wr2", "te"))
+        assert receiving == by_id["qb"].tds
+
+
+def test_receivers_score_a_realistic_share_of_tds():
+    rec = Reconciler()
+    totals = {"wr1": 0, "wr2": 0, "te": 0, "rb": 0}
+    n = 2000
+    for seed in range(n):
+        players, ctxs = _offense()
+        home_out, _ = rec.reconcile(_make_game(home_score=24), players, [], ctxs, [],
+                                    np.random.default_rng(seed))
+        for p in home_out:
+            if p.player_id in totals:
+                totals[p.player_id] += p.tds
+    # Before the fix passing TDs were never credited to receivers (~0.01/game)
+    assert totals["wr1"] / n > 0.4
+    assert totals["wr1"] > totals["wr2"] > 0
+    assert totals["te"] > 0

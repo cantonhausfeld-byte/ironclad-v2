@@ -90,42 +90,37 @@ class Reconciler:
         eligible = [p for p in players if p.played and p.player_id in ctx_by_id]
 
         if eligible:
-            # QB passing TDs: drawn directly as Binomial(completions, rate) rather
-            # than through the team-TD multinomial.  The multinomial anchors tightly
-            # to team_score, producing 58-65% 80% coverage; the direct Binomial draw
-            # captures the observed per-game variance (0-5 TDs) independently.
-            # Clamped to team_tds so the team total stays consistent.
-            qb_pass_tds = 0
+            # QB passing TDs: drawn directly as Binomial(completions, rate) to keep
+            # the observed per-game variance (0-5 TDs). Not clamped to team_tds.
+            pass_tds = 0
             qb_player = next((p for p in eligible if p.pass_attempts > 0), None)
             if qb_player is not None and qb_player.completions > 0:
-                # No clamp against team_tds: the QB's TD count should float
-                # freely to capture the observed 0-5 per-game variance.
-                qb_pass_tds = int(rng.binomial(qb_player.completions, _QB_TD_PER_COMPLETION))
-                qb_player.tds = qb_pass_tds
+                pass_tds = int(rng.binomial(qb_player.completions, _QB_TD_PER_COMPLETION))
+                qb_player.tds = pass_tds
 
-            # Remaining TDs (skill-position receiving + all rush TDs including QB)
-            # distributed via weighted multinomial.  Weights raised to ^1.5 to
-            # concentrate TDs on the highest-usage player, reducing the excessive
-            # per-player variance that was widening WR/TE/RB coverage to 87-94%.
-            remaining_tds = max(0, team_tds - qb_pass_tds)
-            if remaining_tds > 0:
-                weights = []
-                for p in eligible:
-                    ctx = ctx_by_id[p.player_id]
-                    w = 0.0
-                    if p.targets > 0 and ctx.td_rate_per_target:
-                        w += p.targets * ctx.td_rate_per_target
-                    if p.carries > 0 and ctx.td_rate_per_carry:
-                        w += p.carries * ctx.td_rate_per_carry
-                    weights.append(max(w ** 1.5, 0.001))
+            # Every passing TD is also a receiving TD: credit each one to a
+            # receiver, weighted by targets x TD rate.
+            receivers = [p for p in eligible if p is not qb_player and p.targets > 0]
+            _allocate_tds(
+                rng, receivers, pass_tds,
+                [p.targets * (ctx_by_id[p.player_id].td_rate_per_target or 0.0) for p in receivers],
+            )
 
-                total_w = sum(weights)
-                probs = [w / total_w for w in weights]
-                td_counts = {p.player_id: 0 for p in eligible}
-                td_indices = rng.choice(len(eligible), size=remaining_tds, p=probs, replace=True)
-                for idx in td_indices:
-                    td_counts[eligible[idx].player_id] += 1
-                for p in players:
-                    p.tds += td_counts.get(p.player_id, 0)
+            # The rest of the team's TDs are rushing TDs (QB included).
+            rushers = [p for p in eligible if p.carries > 0]
+            _allocate_tds(
+                rng, rushers, max(0, team_tds - pass_tds),
+                [p.carries * (ctx_by_id[p.player_id].td_rate_per_carry or 0.0) for p in rushers],
+            )
 
         return players
+
+
+def _allocate_tds(rng, players: list, n: int, weights: list[float]) -> None:
+    """Add n TDs to players, multinomial on weights (uniform if all zero)."""
+    if n <= 0 or not players:
+        return
+    w = np.maximum(np.asarray(weights, dtype=float), 0.0)
+    probs = w / w.sum() if w.sum() > 0 else np.full(len(players), 1.0 / len(players))
+    for idx, k in enumerate(rng.multinomial(n, probs)):
+        players[idx].tds += int(k)
