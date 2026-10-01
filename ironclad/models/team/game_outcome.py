@@ -57,6 +57,7 @@ TEAM_FEATURES = [
     "temp_f",
     "wind_mph",
     "precip_in",
+    "elo_diff",
 ]
 
 CLF_FEATURES = TEAM_FEATURES
@@ -123,11 +124,11 @@ class GameOutcomeModel(BaseModel):
         )
         self._reg_total.fit(Xm_reg, y_total, sample_weight=w)
 
-        # Compute residual std devs from training set
-        margin_pred = self._reg_margin.predict(Xm_reg)
-        total_pred = self._reg_total.predict(Xm_reg)
-        self._margin_std = float(np.std(y_margin.values - margin_pred))
-        self._total_std = float(np.std(y_total.values - total_pred))
+        # Residual spread for the simulation's margin/total draws. In-sample
+        # residuals of these boosted trees are far too small (margin ~9 pts vs
+        # ~13.4 out of sample), so estimate them from out-of-fold predictions.
+        self._margin_std = _oof_residual_std(self._reg_margin, Xm_reg, y_margin, w)
+        self._total_std = _oof_residual_std(self._reg_total, Xm_reg, y_total, w)
 
         self._fitted = True
         logger.info("GameOutcomeModel fitted on %d rows (clf=%d feats, reg=%d feats)",
@@ -155,10 +156,8 @@ class GameOutcomeModel(BaseModel):
 
     def _predict_trained(self, X: pd.DataFrame) -> dict:
         Xf = _build_diff_features(X)
-        clf_cols = [c for c in CLF_FEATURES if c in Xf.columns]
-        reg_cols = [c for c in TEAM_FEATURES if c in Xf.columns]
-        Xm_clf = Xf[clf_cols].fillna(0)
-        Xm_reg = Xf[reg_cols].fillna(0)
+        Xm_clf = _model_matrix(self._clf, Xf, CLF_FEATURES)
+        Xm_reg = _model_matrix(self._reg_margin, Xf, TEAM_FEATURES)
 
         raw_prob = float(self._clf.predict_proba(Xm_clf)[0, 1])
         home_win_prob = float(np.clip(self._calibrator.transform(np.array([raw_prob]))[0], 0.02, 0.98))
@@ -188,6 +187,33 @@ class GameOutcomeModel(BaseModel):
             "total_mean": float(total_mean),
             "total_std": _TOTAL_STD,
         }
+
+
+def _model_matrix(estimator, Xf: pd.DataFrame, default_cols: list[str]) -> pd.DataFrame:
+    """Columns the estimator was trained on (so older saved models keep working
+    when TEAM_FEATURES grows); default_cols for estimators without names."""
+    cols = list(getattr(estimator, "feature_names_in_", []))
+    if not cols:
+        cols = [c for c in default_cols if c in Xf.columns]
+    for c in cols:
+        if c not in Xf.columns:
+            Xf[c] = 0.0
+    return Xf[cols].fillna(0)
+
+
+def _oof_residual_std(estimator, X: pd.DataFrame, y: pd.Series, w, n_splits: int = 5) -> float:
+    """Std of out-of-fold residuals for a regressor with estimator's params."""
+    from sklearn.base import clone
+    from sklearn.model_selection import KFold
+
+    if len(X) < 2 * n_splits:
+        return float(np.std(y.values - estimator.predict(X)))
+    resid = np.empty(len(X))
+    for tr, te in KFold(n_splits, shuffle=True, random_state=0).split(X):
+        m = clone(estimator)
+        m.fit(X.iloc[tr], y.iloc[tr], sample_weight=None if w is None else w[tr])
+        resid[te] = y.values[te] - m.predict(X.iloc[te])
+    return float(np.std(resid))
 
 
 def pivot_game_rows(home_df: pd.DataFrame, away_df: pd.DataFrame) -> pd.DataFrame:

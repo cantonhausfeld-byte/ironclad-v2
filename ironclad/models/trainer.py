@@ -243,15 +243,14 @@ class ModelTrainer:
             CLF_FEATURES,
             TEAM_FEATURES,
             _build_diff_features,
+            _model_matrix,
         )
-        Xf = _build_diff_features(X_val)
-        clf_cols = [c for c in CLF_FEATURES if c in Xf.columns]
-        reg_cols = [c for c in TEAM_FEATURES if c in Xf.columns]
-        Xm_clf = Xf[clf_cols].fillna(0)
-        Xm_reg = Xf[reg_cols].fillna(0)
-
         if model._clf is None:
             return {}
+
+        Xf = _build_diff_features(X_val)
+        Xm_clf = _model_matrix(model._clf, Xf, CLF_FEATURES)
+        Xm_reg = _model_matrix(model._reg_margin, Xf, TEAM_FEATURES)
 
         probs = model._clf.predict_proba(Xm_clf)[:, 1]
         labels = y_val["home_win"].astype(int).values
