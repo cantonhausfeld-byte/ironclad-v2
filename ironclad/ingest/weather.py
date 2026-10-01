@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import logging
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, datetime, timezone
 
 import pandas as pd
@@ -21,6 +23,47 @@ _GAME_DURATION_HOURS = 4
 # Forecast window Open-Meteo supports (days from today); beyond this → future fallback
 _FORECAST_HORIZON_DAYS = 16
 
+# Backfills fetch thousands of games: run requests concurrently and persist in
+# batches so an interrupted run keeps its progress (stored games are skipped).
+_MAX_WORKERS = 8
+_WRITE_BATCH = 100
+
+
+class _CircuitBreaker:
+    """Stop calling Open-Meteo after repeated consecutive failures.
+
+    When the archive API is rate-limiting or timing out, every game would
+    otherwise wait up to 10s before falling back to NASA POWER.
+    """
+
+    def __init__(self, threshold: int = 5) -> None:
+        self.threshold = threshold
+        self._failures = 0
+        self._lock = threading.Lock()
+
+    @property
+    def open(self) -> bool:
+        return self._failures >= self.threshold
+
+    def record(self, ok: bool) -> None:
+        with self._lock:
+            if ok:
+                self._failures = 0
+            else:
+                self._failures += 1
+                if self._failures == self.threshold:
+                    logger.warning(
+                        "Open-Meteo archive failed %d times in a row; using NASA POWER "
+                        "for the rest of this run", self.threshold,
+                    )
+
+    def reset(self) -> None:
+        with self._lock:
+            self._failures = 0
+
+
+_open_meteo_breaker = _CircuitBreaker()
+
 
 class WeatherIngestor(BaseIngestor):
     def __init__(self, writer: BronzeWriter | None = None) -> None:
@@ -33,26 +76,40 @@ class WeatherIngestor(BaseIngestor):
         on Open-Meteo 429 (rate limit) and to a same-date prior-year climate
         proxy on 400 (future date beyond forecast horizon).
         """
-        rows = []
-        for _, row in games.iterrows():
-            try:
-                gametime = row.get("gametime_local") or row.get("gametime")
-                rec = _fetch_weather(
-                    game_id=row["game_id"],
-                    lat=row.get("lat"),
-                    lon=row.get("lon"),
-                    gameday=row["gameday"],
-                    gametime_local=gametime,
-                )
-                if rec:
-                    rows.append(rec)
-            except Exception as exc:
-                logger.warning("Weather fetch failed for %s: %s", row["game_id"], exc)
+        _open_meteo_breaker.reset()
+        records = games.to_dict("records")
+        pending: list[dict] = []
+        written = done = 0
 
-        if not rows:
-            return 0
-        df = pd.DataFrame(rows)
-        return self._writer.write_weather(df)
+        # Workers only do HTTP; all DuckDB writes stay on this thread.
+        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
+            futures = {pool.submit(_fetch_row, r): r["game_id"] for r in records}
+            for fut in as_completed(futures):
+                done += 1
+                try:
+                    rec = fut.result()
+                    if rec:
+                        pending.append(rec)
+                except Exception as exc:
+                    logger.warning("Weather fetch failed for %s: %s", futures[fut], exc)
+                if len(pending) >= _WRITE_BATCH:
+                    written += self._writer.write_weather(pd.DataFrame(pending))
+                    pending = []
+                    logger.info("Weather: %d/%d games fetched, %d stored", done, len(records), written)
+
+        if pending:
+            written += self._writer.write_weather(pd.DataFrame(pending))
+        return written
+
+
+def _fetch_row(row: dict) -> dict | None:
+    return _fetch_weather(
+        game_id=row["game_id"],
+        lat=row.get("lat"),
+        lon=row.get("lon"),
+        gameday=row["gameday"],
+        gametime_local=row.get("gametime_local") or row.get("gametime"),
+    )
 
 
 # ── Primary: Open-Meteo ───────────────────────────────────────────────────────
@@ -136,6 +193,8 @@ def _parse_open_meteo(data: dict, game_id: str, kickoff_hour: int, source: str) 
 
 
 def _try_open_meteo_archive(game_id, lat, lon, gameday, kickoff_hour) -> dict | None:
+    if _open_meteo_breaker.open:
+        return None
     try:
         resp = requests.get(
             OPEN_METEO_ARCHIVE_URL,
@@ -143,14 +202,18 @@ def _try_open_meteo_archive(game_id, lat, lon, gameday, kickoff_hour) -> dict | 
             timeout=10,
         )
         resp.raise_for_status()
-        return _parse_open_meteo(resp.json(), game_id, kickoff_hour, "open-meteo")
+        rec = _parse_open_meteo(resp.json(), game_id, kickoff_hour, "open-meteo")
+        _open_meteo_breaker.record(ok=True)
+        return rec
     except requests.HTTPError as e:
+        _open_meteo_breaker.record(ok=False)
         if e.response.status_code == 429:
             logger.debug("Open-Meteo archive rate-limited for %s; trying NASA POWER", game_id)
         else:
             logger.debug("Open-Meteo archive error for %s: %s", game_id, e)
         return None
     except Exception as e:
+        _open_meteo_breaker.record(ok=False)
         logger.debug("Open-Meteo archive error for %s: %s", game_id, e)
         return None
 
