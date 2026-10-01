@@ -386,7 +386,9 @@ class SilverTransformer:
     # ── silver.player_weekly_status ───────────────────────────────────────────
 
     def _build_player_weekly_status(self, seasons: list[int] | None) -> int:
-        where = self._season_filter("i.season", seasons)
+        # Filter on the joined season: depth-only rows (healthy players not on
+        # the injury report) have i.season NULL.
+        where = self._season_filter("COALESCE(i.season, d.season)", seasons)
         and_where = where.replace("WHERE", "AND")
         df = self._conn.execute(f"""
             SELECT
