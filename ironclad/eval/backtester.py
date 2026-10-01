@@ -136,19 +136,23 @@ class Backtester:
         trainer = ModelTrainer(conn=self._conn)
 
         # ── Training ──
-        X_train, y_train = trainer._load_team_data(train_seasons)
+        # Hold out the last training season for calibration, mirroring
+        # `ironclad train --train-seasons A-B --val-seasons C`. Calibrating on a
+        # season the model was fit on learns its (near-perfect) in-sample
+        # confidence and leaves out-of-sample probabilities wildly extreme.
+        last_season = max(train_seasons)
+        fit_seasons = [s for s in train_seasons if s != last_season] or train_seasons
+        X_train, y_train = trainer._load_team_data(fit_seasons)
         if X_train.empty:
-            logger.warning("No training data for %s", train_seasons)
+            logger.warning("No training data for %s", fit_seasons)
             return []
 
         model = self._model_class()
         model.fit(X_train, y_train)
 
         # ── Calibration ──
-        # Use the full last training season (~267 games) for Platt scaling.
-        # Platt scaling (logistic regression on logits) is robust with ~267 samples;
+        # Platt scaling (logistic regression on logits) is robust with ~270 samples;
         # isotonic overfits on small calibration sets and produces step-function behavior.
-        last_season = max(train_seasons)
         X_cal, y_cal = trainer._load_team_data([last_season])
         if not X_cal.empty and len(X_cal) >= 30:
             Xf_cal = _build_diff_features(X_cal)
