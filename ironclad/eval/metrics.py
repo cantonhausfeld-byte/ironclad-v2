@@ -36,26 +36,39 @@ def calibration_curve(
     return pd.DataFrame(rows)
 
 
+def _pick_record(pred: np.ndarray, line: np.ndarray, actual: np.ndarray) -> dict:
+    """Record of betting the model's side of every line it disagrees with.
+
+    Picks the high side when pred > line, the low side when pred < line, and
+    skips games where pred == line. A pick wins when actual lands on its side;
+    actual == line is a push.
+    """
+    valid = ~(np.isnan(pred) | np.isnan(line) | np.isnan(actual))
+    p, ln, a = pred[valid], line[valid], actual[valid]
+    picked = p != ln
+    pick_high = (p > ln)[picked]
+    a, ln = a[picked], ln[picked]
+    push = a == ln
+    won = np.where(pick_high, a > ln, a < ln)
+    wins = int((won & ~push).sum())
+    losses = int((~won & ~push).sum())
+    pushes = int(push.sum())
+    pct = wins / (wins + losses) if (wins + losses) > 0 else float("nan")
+    return {"wins": wins, "losses": losses, "pushes": pushes, "pct": round(pct, 4), "n": int(picked.sum())}
+
+
 def ats_record(
     margin_pred: np.ndarray,
     spread_line: np.ndarray,
     actual_margin: np.ndarray,
 ) -> dict:
+    """Against-the-spread record of the model's picks.
+
+    spread_line follows the silver convention: **positive = home favored**
+    (the home team's expected margin). The model takes the home side when its
+    predicted home margin exceeds the spread, the away side when below.
     """
-    ATS (Against The Spread) record from the home team's perspective.
-    spread_line: Vegas home spread (e.g. -3.0 means home favored by 3).
-    Home covers when actual_margin > -spread_line.
-    """
-    valid = ~(np.isnan(spread_line) | np.isnan(actual_margin))
-    s = spread_line[valid]
-    am = actual_margin[valid]
-    push = am == -s
-    cover = am > -s
-    wins = int(cover[~push].sum())
-    losses = int((~cover[~push]).sum())
-    pushes = int(push.sum())
-    pct = wins / (wins + losses) if (wins + losses) > 0 else float("nan")
-    return {"wins": wins, "losses": losses, "pushes": pushes, "pct": round(pct, 4), "n": int(valid.sum())}
+    return _pick_record(margin_pred, spread_line, actual_margin)
 
 
 def ou_record(
@@ -63,17 +76,8 @@ def ou_record(
     total_line: np.ndarray,
     actual_total: np.ndarray,
 ) -> dict:
-    """Over/under record. over when actual_total > total_line."""
-    valid = ~(np.isnan(total_line) | np.isnan(actual_total))
-    tl = total_line[valid]
-    at = actual_total[valid]
-    push = at == tl
-    over = at > tl
-    overs = int(over[~push].sum())
-    unders = int((~over[~push]).sum())
-    pushes = int(push.sum())
-    pct = overs / (overs + unders) if (overs + unders) > 0 else float("nan")
-    return {"overs": overs, "unders": unders, "pushes": pushes, "pct": round(pct, 4), "n": int(valid.sum())}
+    """Over/under record of the model's picks (over when total_pred > line)."""
+    return _pick_record(total_pred, total_line, actual_total)
 
 
 def by_team_bias(predictions_df: pd.DataFrame) -> pd.DataFrame:

@@ -178,11 +178,12 @@ class GameOutcomeModel(BaseModel):
     def _predict_stub(self, X: pd.DataFrame) -> dict:
         home_win_prob = _col(X, "home_win_prob_from_odds", LEAGUE_HOME_WIN_PROB)
         total_mean = _col(X, "implied_total_from_odds", LEAGUE_AVG_TOTAL)
-        spread = _col(X, "spread_from_odds", -LEAGUE_AVG_HOME_MARGIN)
+        # Positive = home favored (silver convention): the home team's expected margin
+        spread = _col(X, "spread_from_odds", LEAGUE_AVG_HOME_MARGIN)
         return {
             "home_win_prob": float(home_win_prob),
             "away_win_prob": 1.0 - float(home_win_prob),
-            "home_margin_mean": -float(spread),
+            "home_margin_mean": float(spread),
             "home_margin_std": _MARGIN_STD,
             "total_mean": float(total_mean),
             "total_std": _TOTAL_STD,

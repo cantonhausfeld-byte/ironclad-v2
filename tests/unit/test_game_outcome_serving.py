@@ -82,9 +82,9 @@ def test_engine_feeds_outcome_model_both_teams():
 
 def test_stub_reads_home_odds_from_pivoted_frame():
     home = _team("H", 0.0, home_win_prob_from_odds=0.7, implied_total_from_odds=51.0,
-                 spread_from_odds=-6.5)
-    away = _team("A", 0.0, home_win_prob_from_odds=0.3, implied_total_from_odds=51.0,
                  spread_from_odds=6.5)
+    away = _team("A", 0.0, home_win_prob_from_odds=0.3, implied_total_from_odds=51.0,
+                 spread_from_odds=-6.5)
     out = GameOutcomeModel().predict(pivot_game_rows(home, away))
     assert abs(out["home_win_prob"] - 0.7) < 1e-9
     assert out["total_mean"] == 51.0

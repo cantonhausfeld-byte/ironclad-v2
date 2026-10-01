@@ -35,11 +35,11 @@ def print_dashboard(predictions_df: pd.DataFrame) -> None:
     ats = summary.get("ats")
     if ats:
         ats_pct = f"{ats['pct']:.1%}" if ats["pct"] == ats["pct"] else "N/A"
-        print(f"\n  ATS record:     {ats['wins']}-{ats['losses']}-{ats['pushes']}  ({ats_pct})")
+        print(f"\n  ATS picks:      {ats['wins']}-{ats['losses']}-{ats['pushes']}  ({ats_pct})")
     ou = summary.get("ou")
     if ou:
         ou_pct = f"{ou['pct']:.1%}" if ou["pct"] == ou["pct"] else "N/A"
-        print(f"  O/U record:     {ou['overs']}o-{ou['unders']}u-{ou['pushes']}p  ({ou_pct})")
+        print(f"  O/U picks:      {ou['wins']}-{ou['losses']}-{ou['pushes']}  ({ou_pct})")
 
     # ── Per-season breakdown ─────────────────────────────────────────────────
     print(f"\n{'─'*60}")
@@ -58,7 +58,7 @@ def print_dashboard(predictions_df: pd.DataFrame) -> None:
         ats_s = ss.get("ats")
         ou_s = ss.get("ou")
         ats_str = f"{ats_s['wins']}-{ats_s['losses']}" if ats_s else " —"
-        ou_str = f"{ou_s['overs']}o-{ou_s['unders']}u" if ou_s else " —"
+        ou_str = f"{ou_s['wins']}-{ou_s['losses']}" if ou_s else " —"
         print(f"  {season:>6}  {n:>5}  {brier:>7}  {mar_mae:>7}  {tot_mae:>7}  {ats_str:>10}  {ou_str:>10}")
 
     # ── Calibration curve ────────────────────────────────────────────────────
