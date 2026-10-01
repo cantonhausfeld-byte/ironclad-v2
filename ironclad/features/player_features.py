@@ -8,7 +8,6 @@ import pandas as pd
 
 from ironclad.config import AVAILABILITY_DEFAULT, FEATURE_VERSION, ROLLING_WINDOW
 from ironclad.features.snapshot import FeatureSnapshot
-from ironclad.store.normalization import normalize_teams
 from ironclad.store.writer import GoldWriter
 
 logger = logging.getLogger(__name__)
@@ -32,9 +31,12 @@ class PlayerFeatureBuilder:
         from ironclad.store.connection import get_connection
         self._conn = conn or get_connection()
         self._writer = GoldWriter(self._conn)
+        # Full-table reads shared across games; builders are created per run,
+        # after silver is built, so this can't go stale.
+        self._table_cache: dict[str, pd.DataFrame] = {}
 
     def build_for_game(self, game_id: str, cutoff_ts: datetime) -> pd.DataFrame:
-        snap = FeatureSnapshot(cutoff_ts, self._conn)
+        snap = FeatureSnapshot(cutoff_ts, self._conn, table_cache=self._table_cache)
         game = snap.game_row(game_id)
         if game is None:
             return pd.DataFrame()
@@ -291,8 +293,7 @@ def _supplement_from_roster(
     snap: FeatureSnapshot,
 ) -> pd.DataFrame:
     """Add roster players not already in players (e.g. healthy starters absent from injury report)."""
-    roster = snap.reader.read_table("bronze.rosters")
-    roster["team"] = normalize_teams(roster["team"])
+    roster = snap.rosters()
     roster = roster[(roster["team"] == team) & (roster["season"] == season) & (roster["week"] <= week)]
     if roster.empty:
         return players

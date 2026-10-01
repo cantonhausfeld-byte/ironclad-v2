@@ -52,9 +52,12 @@ class TeamFeatureBuilder:
         from ironclad.store.connection import get_connection
         self._conn = conn or get_connection()
         self._writer = GoldWriter(self._conn)
+        # Full-table reads shared across games; builders are created per run,
+        # after silver is built, so this can't go stale.
+        self._table_cache: dict[str, pd.DataFrame] = {}
 
     def build_for_game(self, game_id: str, cutoff_ts: datetime) -> pd.DataFrame:
-        snap = FeatureSnapshot(cutoff_ts, self._conn)
+        snap = FeatureSnapshot(cutoff_ts, self._conn, table_cache=self._table_cache)
         game = snap.game_row(game_id)
         if game is None:
             logger.warning("Game %s not found in silver.games", game_id)
@@ -126,7 +129,7 @@ class TeamFeatureBuilder:
             d = default if default is not None else LEAGUE_PRIORS.get(default_key or col, 0.0)
             if recent.empty:
                 return d
-            all_stats = snap.reader.read_table("silver.team_game_stats")
+            all_stats = snap.table("silver.team_game_stats")
             opp_rows = all_stats[
                 all_stats["game_id"].isin(recent["game_id"]) &
                 (all_stats["opponent"] == team)

@@ -18,12 +18,18 @@ class FeatureSnapshot:
         self,
         cutoff_ts: datetime,
         conn: duckdb.DuckDBPyConnection | None = None,
+        table_cache: dict[str, pd.DataFrame] | None = None,
     ) -> None:
+        """table_cache: share full-table reads across snapshots (e.g. one per
+        builder run). Safe because tables are read unfiltered and the cutoff is
+        applied in memory; the cache must not outlive a silver/bronze refresh.
+        Cached frames are shared — callers must filter or copy, never mutate.
+        """
         if cutoff_ts.tzinfo is None:
             cutoff_ts = cutoff_ts.replace(tzinfo=timezone.utc)
         self.cutoff_ts = cutoff_ts
         self.reader = SnapshotReader(cutoff_ts, conn)
-        self._cache: dict[str, pd.DataFrame] = {}
+        self._cache: dict[str, pd.DataFrame] = table_cache if table_cache is not None else {}
         self._past_ids: pd.Series | None = None
         self._elo: dict[int, dict[str, float]] = {}
 
@@ -31,6 +37,20 @@ class FeatureSnapshot:
         if table not in self._cache:
             self._cache[table] = self.reader.read_table(table)
         return self._cache[table]
+
+    def table(self, table: str) -> pd.DataFrame:
+        """Full (unfiltered, shared) table — filter by cutoff yourself, don't mutate."""
+        return self._read_cached(table)
+
+    def rosters(self) -> pd.DataFrame:
+        """bronze.rosters with normalized team codes (shared, don't mutate)."""
+        key = "bronze.rosters#normalized"
+        if key not in self._cache:
+            from ironclad.store.normalization import normalize_teams
+            df = self.reader.read_table("bronze.rosters")
+            df["team"] = normalize_teams(df["team"])
+            self._cache[key] = df
+        return self._cache[key]
 
     # ── Team history ──────────────────────────────────────────────────────────
 
