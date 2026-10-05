@@ -112,8 +112,10 @@ def run_end_of_season_retrain(season: int) -> dict:
     backfill_result = BackfillWorkflow().run([season])
     logger.info("Season backfill complete: %s", backfill_result)
 
-    train_seasons = list(range(2016, season + 1))
-    metrics = ModelTrainer().train_all(train_seasons=train_seasons)
+    # Hold out the season just finished for calibration (an uncalibrated game
+    # model is badly overconfident; see docs/metrics).
+    train_seasons = list(range(2016, season))
+    metrics = ModelTrainer().train_all(train_seasons=train_seasons, val_seasons=[season])
     logger.info("Retrain complete: models=%s", list(metrics.keys()))
     return {"backfill": backfill_result, "train": metrics}
 

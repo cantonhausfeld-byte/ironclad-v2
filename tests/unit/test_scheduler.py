@@ -258,3 +258,19 @@ def test_job_recovers_after_one_failure(tmp_path, monkeypatch):
     assert result == {"pre_game": {"games": 16}}
     alert.assert_not_called()
     summary.assert_called_once()
+
+
+def test_end_of_season_retrain_calibrates_on_the_finished_season():
+    from ironclad.workflow.scheduler import run_end_of_season_retrain
+
+    with (
+        patch("ironclad.workflow.backfill.BackfillWorkflow") as backfill,
+        patch("ironclad.models.trainer.ModelTrainer") as trainer,
+    ):
+        backfill.return_value.run.return_value = {}
+        trainer.return_value.train_all.return_value = {}
+        run_end_of_season_retrain(season=2026)
+
+    kwargs = trainer.return_value.train_all.call_args.kwargs
+    assert kwargs["train_seasons"] == list(range(2016, 2026))
+    assert kwargs["val_seasons"] == [2026]

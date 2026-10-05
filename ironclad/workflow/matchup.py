@@ -45,8 +45,19 @@ class MatchupWorkflow:
         backfill_if_missing: bool = False,
     ) -> Path:
         result, game_meta, cutoff_ts, home_feats = self.simulate(game_id, backfill_if_missing)
+        md_path, _ = self.write_report(result, game_meta, cutoff_ts, output_dir, fmt)
+        return md_path
 
-        # Build report context
+    def write_report(
+        self,
+        result,
+        game_meta: dict,
+        cutoff_ts: datetime,
+        output_dir: Path = REPORTS_DIR,
+        fmt: str = "markdown",
+    ) -> tuple[Path, dict]:
+        """Render report files for a simulated game; return (markdown path, context)."""
+        game_id = game_meta["game_id"]
         model_version = self._get_model_version(get_connection())
         ctx = build_report_context(
             result=result,
@@ -69,7 +80,7 @@ class MatchupWorkflow:
         export_team_csv(result, Path(str(base) + "_teams.csv"))
 
         logger.info("Report written to %s", md_path)
-        return md_path
+        return md_path, ctx
 
     def simulate(
         self,

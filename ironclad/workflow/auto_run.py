@@ -1,9 +1,13 @@
-"""Weekly auto-run: data refresh → odds → simulate all games → save edges."""
+"""Weekly auto-run: data refresh → odds → simulate all games → report every game → save edges."""
 from __future__ import annotations
 
 import logging
 from datetime import date
+from pathlib import Path
 
+import pandas as pd
+
+from ironclad.config import REPORTS_DIR
 from ironclad.store.connection import get_connection
 from ironclad.store.schema import create_all_tables
 
@@ -33,12 +37,14 @@ class AutoRunWorkflow:
         min_ev: float = 0.0,
         skip_odds: bool = False,
         historical: bool = False,
+        output_dir: Path = REPORTS_DIR,
     ) -> None:
         self.n_draws = n_draws
         self.kelly_fraction = kelly_fraction
         self.min_ev = min_ev
         self.skip_odds = skip_odds
         self.historical = historical  # allow targeting completed weeks (no gameday >= today filter)
+        self.output_dir = Path(output_dir)
 
     def run(self, season: int | None = None, week: int | None = None) -> dict:
         conn = get_connection()
@@ -106,42 +112,44 @@ class AutoRunWorkflow:
         from ironclad import config as _cfg
         _discord_enabled = bool(_cfg.DISCORD_WEBHOOK_URL)
 
+        reports_written = 0
         for game_id in games_df["game_id"].tolist():
             try:
-                prop_lines = load_prop_lines_from_db(conn, game_id)
-                if not prop_lines:
-                    skipped.append(f"{game_id} (no props in DB)")
-                    continue
-
-                result, game_meta, cutoff_ts, _ = MatchupWorkflow(n_draws=self.n_draws).simulate(game_id)
-
-                edges_df = PropAnalyzer(kelly_fraction=self.kelly_fraction).analyze(
-                    result, prop_lines
-                )
-                if self.min_ev > 0 and not edges_df.empty:
-                    edges_df = edges_df[edges_df["ev"] >= self.min_ev].reset_index(drop=True)
-
-                if not edges_df.empty:
-                    ids = save_edges(conn, game_id, self.n_draws, edges_df)
-                    edges_saved += len(ids)
-
+                wf = MatchupWorkflow(n_draws=self.n_draws)
+                result, game_meta, cutoff_ts, _ = wf.simulate(game_id)
                 games_simulated += 1
 
-                # Post model output to Discord if webhook is configured and edges were found
-                if _discord_enabled and not edges_df.empty:
+                # Every game gets a report, with or without prop lines.
+                _, ctx = wf.write_report(result, game_meta, cutoff_ts, self.output_dir, fmt="both")
+                reports_written += 1
+
+                edges_df = pd.DataFrame()
+                prop_lines = load_prop_lines_from_db(conn, game_id)
+                if prop_lines:
+                    edges_df = PropAnalyzer(kelly_fraction=self.kelly_fraction).analyze(
+                        result, prop_lines
+                    )
+                    if self.min_ev > 0 and not edges_df.empty:
+                        edges_df = edges_df[edges_df["ev"] >= self.min_ev].reset_index(drop=True)
+                    if not edges_df.empty:
+                        ids = save_edges(conn, game_id, self.n_draws, edges_df)
+                        edges_saved += len(ids)
+                else:
+                    skipped.append(f"{game_id} (no props in DB; report only)")
+
+                if _discord_enabled:
                     try:
                         from ironclad.notifications.discord import post_model_output
-                        from ironclad.report.builder import build_report_context
                         from ironclad.report.markdown_renderer import render_markdown_str
                         hw, aw = result.win_probability()
                         scores = result.score_summary()
-                        ctx = build_report_context(result, game_meta, cutoff_ts, n_draws=self.n_draws)
-                        report_md = render_markdown_str(ctx)
-                        top = edges_df.sort_values("ev", ascending=False)
                         post_model_output(
                             game_id=game_id,
-                            report_md=report_md,
-                            top_edges_df=top,
+                            report_md=render_markdown_str(ctx),
+                            top_edges_df=(
+                                edges_df.sort_values("ev", ascending=False)
+                                if not edges_df.empty else None
+                            ),
                             win_prob_home=hw,
                             win_prob_away=aw,
                             home_team=result.home_team,
@@ -165,6 +173,7 @@ class AutoRunWorkflow:
             "odds_rows": odds_rows,
             "games_total": len(games_df),
             "games_simulated": games_simulated,
+            "reports_written": reports_written,
             "edges_saved": edges_saved,
             "skipped": skipped,
         }
