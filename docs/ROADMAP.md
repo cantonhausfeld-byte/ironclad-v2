@@ -74,7 +74,7 @@ Port each item separately. Keep a feature only if walk-forward log-loss and the 
 
 - [ ] 4.1 Game model: reliability diagrams and calibration error by probability bucket, and a comparison against the closing line (CLV).
 - [x] 4.1b QB TDs: fixed by picking the depth-chart starter. Mean 1.34 vs 1.29 actual; anytime-TD Brier 0.158 vs 0.212 baseline.
-- [x] 4.1c Report consistency: team passing yards = QB yards = receivers' total − sack yards in every draw (`b???`). Yardage now comes from the draw's score rather than a flat 9.0 yds/att.
+- [x] 4.1c Report consistency: team passing yards = QB yards = receivers' total − sack yards in every draw (`22b780a`). Yardage now comes from the draw's score rather than a flat 9.0 yds/att.
   Also fixed: IR and practice-squad players were simulated at full volume, stale gold player rows survived rebuilds,
   the starting QB was picked by stale volume, and team targets/carries were over-dispersed.
 - [ ] 4.1d Residual calibration: QB passing about 20 yds high in 2025 (a low-passing year; median-based bias); RB TDs slightly high. WR
