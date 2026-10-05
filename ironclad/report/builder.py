@@ -92,7 +92,9 @@ def build_report_context(
         result_rows = []
         for _, p in players.iterrows():
             r = pivot(p["player_id"], p["player_name"], p["position"])
-            if r:
+            # Skip players with no projected volume (e.g. a backup QB): a row of
+            # dashes is noise in the report.
+            if r and any(r.get(m) for m in metrics):
                 result_rows.append(r)
 
         # Sort by mean of first metric descending, then trim to top_n
