@@ -151,9 +151,9 @@ class GameDraw:
         # ── Yardage ───────────────────────────────────────────────────────────
         # Conditioned on this draw's attempts and points, so yardage tracks the
         # simulated game (a 35-point draw gains more than a 10-point one) and,
-        # through the score model, team strength. Fitted on 2021-2024
-        # the same fit. Pass yards are gross (receivers' total); QB = gross - sacks.
-        # the same fit. Team pass yards equal the QB's (gross) passing yards.
+        # through the score model, team strength. Fitted on 2021-2024 silver
+        # data (R² 0.58 pass / 0.61 rush); residual std from the same fit.
+        # Pass yards are gross (receivers' total); QB = gross - sack yards.
         home_pass_yards = _team_yards(rng, _PASS_YDS, home_pass_att, home_score)
         away_pass_yards = _team_yards(rng, _PASS_YDS, away_pass_att, away_score)
         home_rush_yards = _team_yards(rng, _RUSH_YDS, home_rush_att, home_score)
