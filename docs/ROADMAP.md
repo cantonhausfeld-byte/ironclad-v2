@@ -73,8 +73,12 @@ Port each item separately. Keep a feature only if walk-forward log-loss and the 
 ## Phase 4 — Model validation and calibration (ongoing, 1–2 weeks initial)
 
 - [ ] 4.1 Game model: reliability diagrams and calibration error by probability bucket, and a comparison against the closing line (CLV).
-- [ ] 4.1b **QB TDs are under-predicted:** simulated mean 1.04 vs 1.29 actual, P(anytime) 0.49 vs 0.69 (2025 wks 10–11). Check `_QB_TD_PER_COMPLETION` and the completions volume.
-- [ ] 4.1c Report consistency: team pass yards, QB pass yards and summed receiver yards disagree (TEN@BAL wk4: 346 / 230 / ~306). Also the "Implied Spread" sign label and the kickoff time display.
+- [x] 4.1b QB TDs: fixed by picking the depth-chart starter. Mean 1.34 vs 1.29 actual; anytime-TD Brier 0.158 vs 0.212 baseline.
+- [x] 4.1c Report consistency: team passing yards = QB yards = receivers' total − sack yards in every draw (`b???`). Yardage now comes from the draw's score rather than a flat 9.0 yds/att.
+  Also fixed: IR and practice-squad players were simulated at full volume, stale gold player rows survived rebuilds,
+  the starting QB was picked by stale volume, and team targets/carries were over-dispersed.
+- [ ] 4.1d Residual calibration: QB passing about 20 yds high in 2025 (a low-passing year; median-based bias); RB TDs slightly high. WR
+  rec yards coverage 72% (target 80%). Refit the yardage constants each offseason (`game_draw.py`).
 - [ ] 4.2 Props: 50/80/95% interval coverage by position and stat, with each within ±3 pts of nominal.
 - [ ] 4.3 Decision rule: set a minimum-edge threshold per market from backtest ROI. Suppress markets that don't clear it.
 - [ ] 4.4 Bankroll: cap Kelly fraction and exposure per week; build parlays only from markets that pass 4.3.

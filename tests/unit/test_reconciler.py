@@ -123,3 +123,15 @@ def test_receivers_score_a_realistic_share_of_tds():
     assert totals["wr1"] / n > 0.4
     assert totals["wr1"] > totals["wr2"] > 0
     assert totals["te"] > 0
+
+
+def test_qb_pass_yards_equal_receiving_yards_minus_sacks():
+    rec = Reconciler()
+    for seed in range(50):
+        players, ctxs = _offense()
+        game = _make_game(home_score=24, pass_yards=260.0)
+        game.home_sack_yards = 14.0
+        home_out, _ = rec.reconcile(game, players, [], ctxs, [], np.random.default_rng(seed))
+        receiving = sum(p.rec_yards for p in home_out)
+        qb = next(p for p in home_out if p.position == "QB")
+        assert abs(qb.pass_yards - (receiving - 14.0)) < 1e-6

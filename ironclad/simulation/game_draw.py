@@ -27,6 +27,33 @@ class GameDrawResult:
     away_game_quality_factor: float = 0.0
     home_turnovers: int = 0
     away_turnovers: int = 0
+    # Pass yards above are gross (= receivers' total); QB/net = gross - sack yards
+    home_sack_yards: float = 0.0
+    away_sack_yards: float = 0.0
+
+
+# yards = intercept + per_attempt * attempts + per_point * points + N(0, std)
+# Pass: gross yards (sum of receivers' yards). Fitted on 2021-2024 team-games
+# (passing has trended down ~20 yds/game since 2016-2020, so recent seasons
+# only); refit each offseason. Sacks: 0.067 per attempt at ~6.7 yards each
+# (gross - QB passing yards = sack yards, ~16/game).
+_PASS_YDS = (-45.2, 5.56, 3.64, 47.0)
+_RUSH_YDS = (-27.6, 4.89, 0.58, 31.9)
+_SACKS_PER_ATT = 0.067
+_YDS_PER_SACK = (6.71, 3.0)
+
+
+def _sack_yards(rng: np.random.Generator, attempts: int) -> float:
+    n = int(rng.poisson(_SACKS_PER_ATT * max(attempts, 0)))
+    if n == 0:
+        return 0.0
+    return float(np.clip(rng.normal(*_YDS_PER_SACK, size=n), 0.0, None).sum())
+
+
+def _team_yards(rng: np.random.Generator, coefs: tuple, attempts: int, points: int) -> float:
+    intercept, per_att, per_pt, std = coefs
+    mean = intercept + per_att * attempts + per_pt * points
+    return max(0.0, float(rng.normal(mean, std)))
 
 
 def _apply_game_script(
@@ -122,16 +149,17 @@ class GameDraw:
         away_gqf = float(rng.normal(0.0, 0.15))
 
         # ── Yardage ───────────────────────────────────────────────────────────
-        # team_pass_yards is intentionally ~49% above actual net yds/att (6.0)
-        # to compensate for UsageModel under-projecting individual WR/TE volume.
-        # QB pass_yards in reconciler are drawn independently from N(att*6.0, …).
-        # team_rush_yards is ~12% above actual ypc (4.3); prior fix (RB 12→18,
-        # QB 3.5→6) closes most of the UsageModel under-projection gap so the
-        # multiplier can be reduced from 5.4 to 4.8.
-        home_pass_yards = max(0.0, float(rng.normal(home_pass_att * 9.0, home_pass_att * 2.8)))
-        away_pass_yards = max(0.0, float(rng.normal(away_pass_att * 9.0, away_pass_att * 2.8)))
-        home_rush_yards = max(0.0, float(rng.normal(home_rush_att * 4.8, home_rush_att * 2.2)))
-        away_rush_yards = max(0.0, float(rng.normal(away_rush_att * 4.8, away_rush_att * 2.2)))
+        # Conditioned on this draw's attempts and points, so yardage tracks the
+        # simulated game (a 35-point draw gains more than a 10-point one) and,
+        # through the score model, team strength. Fitted on 2021-2024
+        # the same fit. Pass yards are gross (receivers' total); QB = gross - sacks.
+        # the same fit. Team pass yards equal the QB's (gross) passing yards.
+        home_pass_yards = _team_yards(rng, _PASS_YDS, home_pass_att, home_score)
+        away_pass_yards = _team_yards(rng, _PASS_YDS, away_pass_att, away_score)
+        home_rush_yards = _team_yards(rng, _RUSH_YDS, home_rush_att, home_score)
+        away_rush_yards = _team_yards(rng, _RUSH_YDS, away_rush_att, away_score)
+        home_sack_yards = _sack_yards(rng, home_pass_att)
+        away_sack_yards = _sack_yards(rng, away_pass_att)
 
         return GameDrawResult(
             home_score=home_score,
@@ -151,4 +179,6 @@ class GameDraw:
             away_game_quality_factor=away_gqf,
             home_turnovers=home_tos,
             away_turnovers=away_tos,
+            home_sack_yards=home_sack_yards,
+            away_sack_yards=away_sack_yards,
         )

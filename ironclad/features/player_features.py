@@ -56,6 +56,7 @@ class PlayerFeatureBuilder:
             players = snap.team_players_for_game(team, season, week)
             # Always supplement from roster to capture healthy players not on injury report
             players = _supplement_from_roster(players, team, season, week, snap)
+            players = _drop_inactive(players, team, season, week, snap)
 
             # Warn when depth chart data is missing: usage model will fall back to
             # share-based starter inference, which is less precise.
@@ -88,6 +89,9 @@ class PlayerFeatureBuilder:
                 except Exception as exc:
                     logger.warning("Player %s feature build failed: %s", player.get("player_id"), exc)
 
+        # Replace, don't upsert: a player who no longer qualifies (e.g. moved to
+        # injured reserve) must not keep a stale row from an earlier build.
+        self._conn.execute("DELETE FROM gold.player_game_features WHERE game_id = ?", [game_id])
         if not rows:
             return pd.DataFrame()
         df = pd.DataFrame(rows)
@@ -285,6 +289,27 @@ def _avg_col(df: pd.DataFrame, col: str, default=None):
     return float(vals.mean()) if len(vals) else default
 
 
+def _drop_inactive(
+    players: pd.DataFrame, team: str, season: int, week: int, snap: FeatureSnapshot,
+) -> pd.DataFrame:
+    """Drop players whose latest roster status for this week isn't active.
+
+    Season-ending injuries leave the weekly injury report and stay on ESPN
+    depth charts, so injured-reserve (RES) and practice-squad (DEV) players
+    were simulated at full availability with their pre-injury volume.
+    Players with no roster row are kept.
+    """
+    if players.empty or "player_id" not in players.columns:
+        return players
+    roster = snap.rosters()
+    roster = roster[(roster["team"] == team) & (roster["season"] == season) & (roster["week"] <= week)]
+    if roster.empty or "status" not in roster.columns:
+        return players
+    latest = roster[roster["week"] == roster["week"].max()]
+    inactive = set(latest.loc[latest["status"].notna() & (latest["status"] != "ACT"), "player_id"].astype(str))
+    return players[~players["player_id"].astype(str).isin(inactive)]
+
+
 def _supplement_from_roster(
     players: pd.DataFrame,
     team: str,
@@ -298,6 +323,11 @@ def _supplement_from_roster(
     if roster.empty:
         return players
     roster = roster[roster["week"] == roster["week"].max()].copy()
+    # Only the active roster: practice squad (DEV), injured reserve (RES),
+    # inactive, cut and retired players were being simulated at full volume.
+    # Unknown status is kept.
+    if "status" in roster.columns:
+        roster = roster[roster["status"].isna() | (roster["status"] == "ACT")]
     # Keep only skill positions worth projecting
     if "position" in roster.columns:
         roster = roster[roster["position"].isin(SKILL_POSITIONS)]

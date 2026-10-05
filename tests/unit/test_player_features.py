@@ -164,3 +164,60 @@ def test_supplement_from_roster_normalizes_team_code():
     result = _supplement_from_roster(pd.DataFrame(), "LAR", 2024, 1, snap)
     assert not result.empty, "Roster lookup with 'LA'→'LAR' normalization should find the player"
     assert result.iloc[0]["team"] == "LAR"
+
+
+def test_supplement_from_roster_only_adds_active_players():
+    from datetime import timezone
+
+    from ironclad.features.player_features import _supplement_from_roster
+    from ironclad.features.snapshot import FeatureSnapshot
+
+    conn = _conn()
+    for pid, status in [("ACT1", "ACT"), ("IR1", "RES"), ("PS1", "DEV"), ("INA1", "INA"), ("CUT1", "CUT")]:
+        conn.execute(
+            "INSERT INTO bronze.rosters (season, week, player_id, player_name, team, position, "
+            "status, _ingest_ts) VALUES (2025, 5, ?, ?, 'KC', 'WR', ?, '2025-10-01 00:00:00+00')",
+            [pid, pid, status],
+        )
+    snap = FeatureSnapshot(datetime(2099, 1, 1, tzinfo=timezone.utc), conn)
+    result = _supplement_from_roster(pd.DataFrame(), "KC", 2025, 5, snap)
+    assert list(result["player_id"]) == ["ACT1"]
+
+
+def test_drop_inactive_removes_injured_reserve_and_practice_squad():
+    from datetime import timezone
+
+    from ironclad.features.player_features import _drop_inactive
+    from ironclad.features.snapshot import FeatureSnapshot
+
+    conn = _conn()
+    for pid, status in [("STAR", "RES"), ("PS", "DEV"), ("WR1", "ACT")]:
+        conn.execute(
+            "INSERT INTO bronze.rosters (season, week, player_id, player_name, team, position, "
+            "status, _ingest_ts) VALUES (2025, 10, ?, ?, 'MIA', 'WR', ?, '2025-11-01 00:00:00+00')",
+            [pid, pid, status],
+        )
+    players = pd.DataFrame({"player_id": ["STAR", "PS", "WR1", "NOROSTER"], "team": "MIA"})
+    snap = FeatureSnapshot(datetime(2099, 1, 1, tzinfo=timezone.utc), conn)
+    kept = _drop_inactive(players, "MIA", 2025, 10, snap)
+    assert list(kept["player_id"]) == ["WR1", "NOROSTER"]
+
+
+def test_rebuild_removes_players_who_no_longer_qualify():
+    from ironclad.features.player_features import PlayerFeatureBuilder
+
+    conn = _conn()
+    conn.execute(
+        "INSERT INTO silver.games (game_id, season, season_type, week, gameday, home_team, away_team) "
+        "VALUES ('2025_10_BUF_MIA', 2025, 'REG', 10, '2025-11-09', 'MIA', 'BUF')"
+    )
+    conn.execute(
+        "INSERT INTO gold.player_game_features (game_id, player_id, player_name, team, opponent, "
+        "season, week, position, is_home, cutoff_ts, feature_version) "
+        "VALUES ('2025_10_BUF_MIA', 'STALE', 'Stale', 'MIA', 'BUF', 2025, 10, 'WR', true, NOW(), 'v')"
+    )
+    PlayerFeatureBuilder(conn).build_for_game("2025_10_BUF_MIA", datetime(2025, 11, 9, 17, 30))
+    ids = conn.execute(
+        "SELECT player_id FROM gold.player_game_features WHERE game_id = '2025_10_BUF_MIA'"
+    ).fetchall()
+    assert ("STALE",) not in ids

@@ -194,9 +194,8 @@ def test_game_draw_sets_quality_factors():
 
 
 def test_team_pass_yards_calibrated():
-    # With pass_rate≈0.58 and plays≈64, we expect ~37 pass_att × 9.0 yds/att ≈ 333 yards.
-    # The 9.0 multiplier is intentionally above actual net ypa (~6.0) to compensate
-    # for UsageModel under-projecting WR/TE volume (scale factor correction).
+    # ~37 attempts and ~23.5 points -> about league-average gross passing (~245
+    # yds, the receivers' total; 2016-2024 mean 245), not the old 9.0 yds/att.
     home_env = {"pass_rate_projected": 0.58, "total_plays_projected": 64}
     away_env = {"pass_rate_projected": 0.55, "total_plays_projected": 62}
     outcome = {
@@ -207,4 +206,16 @@ def test_team_pass_yards_calibrated():
     rng = np.random.default_rng(99)
     pass_yards = [gd.draw(rng, outcome, home_env, away_env).home_pass_yards for _ in range(2000)]
     mean_yds = float(np.mean(pass_yards))
-    assert 300 < mean_yds < 380, f"Mean pass yards {mean_yds:.1f} out of expected range"
+    assert 200 < mean_yds < 265, f"Mean pass yards {mean_yds:.1f} out of expected range"
+
+
+def test_yards_track_points_in_the_draw():
+    home_env = {"pass_rate_projected": 0.58, "total_plays_projected": 64}
+    away_env = {"pass_rate_projected": 0.58, "total_plays_projected": 64}
+    outcome = {"total_mean": 47.0, "total_std": 10.0,
+               "home_margin_mean": 0.0, "home_margin_std": 14.0}
+    rng = np.random.default_rng(7)
+    draws = [GameDraw().draw(rng, outcome, home_env, away_env) for _ in range(3000)]
+    pts = np.array([d.home_score for d in draws])
+    yds = np.array([d.home_pass_yards + d.home_rush_yards for d in draws])
+    assert np.corrcoef(pts, yds)[0, 1] > 0.3

@@ -31,6 +31,7 @@ class PlayerContext:
     td_rate_per_carry: float
     yards_per_target_std: float = 5.0
     yards_per_carry_std: float = 3.5
+    depth_team: int | None = None
 
 
 @dataclass

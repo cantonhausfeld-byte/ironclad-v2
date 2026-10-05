@@ -28,11 +28,11 @@ class Reconciler:
         rng: np.random.Generator,
     ) -> tuple[list[PlayerDrawResult], list[PlayerDrawResult]]:
         home = self._reconcile_team(
-            game.home_score, game.home_pass_yards, game.home_rush_yards,
+            game.home_score, game.home_pass_yards, game.home_rush_yards, game.home_sack_yards,
             home_players, home_contexts, rng,
         )
         away = self._reconcile_team(
-            game.away_score, game.away_pass_yards, game.away_rush_yards,
+            game.away_score, game.away_pass_yards, game.away_rush_yards, game.away_sack_yards,
             away_players, away_contexts, rng,
         )
         return home, away
@@ -42,6 +42,7 @@ class Reconciler:
         team_score: int,
         team_pass_yards: float,
         team_rush_yards: float,
+        team_sack_yards: float,
         players: list[PlayerDrawResult],
         contexts: list[PlayerContext],
         rng: np.random.Generator,
@@ -59,16 +60,13 @@ class Reconciler:
             for p in players:
                 p.rec_yards = max(0.0, p.rec_yards * scale)
 
-        # QB pass_yards: drawn independently using calibrated NFL net yds/att (6.0).
-        # Decoupled from total_rec_after so WR/TE scale and QB calibration are
-        # independent — team_pass_yards (used above for WR scale) is intentionally
-        # higher than net pass yards to correct for under-projected player volumes.
-        for p in players:
-            if p.pass_attempts > 0:
-                p.pass_yards = max(
-                    0.0,
-                    float(rng.normal(p.pass_attempts * 6.0, p.pass_attempts * 1.8)),
-                )
+        # QB pass_yards = what the receivers gained minus sack yards (passing
+        # yards are recorded net of sacks), split by attempts if two QBs threw.
+        passers = [p for p in players if p.pass_attempts > 0]
+        total_att = sum(p.pass_attempts for p in passers)
+        team_rec = max(0.0, sum(p.rec_yards for p in players) - team_sack_yards)
+        for p in passers:
+            p.pass_yards = team_rec * p.pass_attempts / total_att
 
         # Scale rush_yards to match team totals; do NOT scale carries for the
         # same reason as targets: NB carry counts have intentional variance that

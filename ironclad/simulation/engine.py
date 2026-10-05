@@ -121,8 +121,9 @@ class MonteCarloEngine:
             draws.append(DrawRecord(
                 home_score=gd.home_score,
                 away_score=gd.away_score,
-                home_pass_yards=gd.home_pass_yards,
-                away_pass_yards=gd.away_pass_yards,
+                # Net of sacks, matching the QB lines
+                home_pass_yards=max(0.0, gd.home_pass_yards - gd.home_sack_yards),
+                away_pass_yards=max(0.0, gd.away_pass_yards - gd.away_sack_yards),
                 home_rush_yards=gd.home_rush_yards,
                 away_rush_yards=gd.away_rush_yards,
                 home_pass_att=gd.home_pass_att,
@@ -163,13 +164,60 @@ class MonteCarloEngine:
                 td_rate_per_carry=eff["td_rate_per_carry"] or 0.04,
                 yards_per_target_std=eff["yards_per_target_std"],
                 yards_per_carry_std=eff["yards_per_carry_std"],
+                depth_team=_int_or_none(row.get("depth_team")),
             )
             contexts.append(ctx)
 
         contexts = _allocate_qb_pass_volume(contexts)
         contexts = _allocate_rb_rush_volume(contexts)
         contexts = _allocate_wr_target_volume(contexts)
+        _normalize_team_volume(contexts)
         return contexts
+
+
+# PlayerDraw scales projections by team_pass_att / 32 and team_rush_att / 25,
+# so a team's projections should add up to its real volume at that baseline:
+# 0.903 targets per pass attempt and 1.0 carries per rush attempt (2016-2024).
+_TEAM_TARGETS = 0.903 * 32.0
+_TEAM_CARRIES = 1.0 * 25.0
+# Shares are sharpened (projection ** gamma, then renormalized): the usage
+# model's intercept gives every rostered player 1-2 targets/carries, which
+# spread ~30% of yards to players who don't record a stat. Calibrated against
+# the real top-3 receiver share and the prop backtest (docs/metrics).
+_USAGE_GAMMA = 2.0
+
+
+def _normalize_team_volume(contexts: list[PlayerContext], gamma: float | None = None) -> None:
+    """Rescale a team's projected targets and carries to real team volume.
+
+    Targets are sharpened within each position group (WR, TE, RB/FB) so each
+    group keeps its share of the team's targets. QB carries (scrambles,
+    designed runs) are kept as projected; only the other ball carriers share
+    the remaining team carries.
+    """
+    g = _USAGE_GAMMA if gamma is None else gamma
+
+    def expected(cs, attr):
+        return sum(getattr(c, attr) * c.availability for c in cs)
+
+    def sharpen(cs, attr, total):
+        weights = [getattr(c, attr) ** g for c in cs]
+        exp = sum(w * c.availability for w, c in zip(weights, cs))
+        if exp > 0:
+            for w, c in zip(weights, cs):
+                setattr(c, attr, total * w / exp)
+
+    receivers = [c for c in contexts if c.targets_projected > 0 and c.position != "QB"]
+    all_targets = expected(receivers, "targets_projected")
+    if all_targets > 0:
+        for group in (("WR",), ("TE",), ("RB", "FB")):
+            members = [c for c in receivers if c.position in group]
+            share = expected(members, "targets_projected") / all_targets
+            sharpen(members, "targets_projected", _TEAM_TARGETS * share)
+
+    qb_carries = expected([c for c in contexts if c.position == "QB"], "carries_projected")
+    rushers = [c for c in contexts if c.carries_projected > 0 and c.position != "QB"]
+    sharpen(rushers, "carries_projected", max(0.0, _TEAM_CARRIES - qb_carries))
 
 
 def _allocate_rb_rush_volume(contexts: list[PlayerContext]) -> list[PlayerContext]:
@@ -204,16 +252,39 @@ def _allocate_wr_target_volume(contexts: list[PlayerContext]) -> list[PlayerCont
 
 
 def _allocate_qb_pass_volume(contexts: list[PlayerContext]) -> list[PlayerContext]:
-    """Give all pass and rush volume to the primary QB; backups get zero."""
+    """Give the team's QB volume to the starter; backups get zero.
+
+    The starter is the depth-chart QB1 who isn't ruled out (next on the chart
+    otherwise), falling back to projected volume without depth data. Picking by
+    recent volume chose the previous starter after every QB change (a rookie
+    taking over, a veteran back from injury). The starter inherits the team's
+    passing volume, which his own short history understates; rushing stays his.
+    """
     qbs = [ctx for ctx in contexts if ctx.position == "QB"]
     if len(qbs) <= 1:
         return contexts
-    primary = max(qbs, key=lambda c: c.pass_attempts_projected + c.carries_projected)
+    team_pass_att = max(c.pass_attempts_projected for c in qbs)
+    charted = sorted(
+        (c for c in qbs if c.depth_team is not None and c.availability > 0),
+        key=lambda c: c.depth_team,
+    )
+    if charted:
+        primary = charted[0]
+    else:
+        primary = max(qbs, key=lambda c: c.pass_attempts_projected + c.carries_projected)
     for ctx in qbs:
         if ctx is not primary:
             ctx.pass_attempts_projected = 0.0
             ctx.carries_projected = 0.0
+    primary.pass_attempts_projected = team_pass_att
     return contexts
+
+
+def _int_or_none(v) -> int | None:
+    try:
+        return None if v is None or pd.isna(v) else int(v)
+    except (TypeError, ValueError):
+        return None
 
 
 def _try_load(registry: ModelRegistry, name: str, fallback_cls):
