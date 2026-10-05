@@ -4,6 +4,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+import pandas as pd
+
 from ironclad.simulation.results import SimulationResult
 
 
@@ -115,16 +117,18 @@ def build_report_context(
         "total_projected": total_p50,
         "total_range": f"{round(scores['total_p10'])}–{round(scores['total_p90'])}",
         "spread_implied": spread_implied,
+        "model_line": format_line(home_team, away_team,
+                                  scores["home_score_mean"] - scores["away_score_mean"]),
         "season": game_meta.get("season", ""),
         "week": game_meta.get("week", ""),
-        "gameday": game_meta.get("gameday", ""),
+        "gameday": format_kickoff(game_meta.get("gameday"), game_meta.get("gametime_local")),
         "stadium": game_meta.get("stadium", ""),
         "weather_desc": _weather_desc(game_meta),
         "surface": game_meta.get("surface", ""),
         "is_dome": game_meta.get("is_dome", False),
         "altitude_ft": game_meta.get("altitude_ft", 0),
         "vegas_total": game_meta.get("total_consensus", "N/A"),
-        "vegas_spread": game_meta.get("spread_consensus", "N/A"),
+        "vegas_spread": format_line(home_team, away_team, game_meta.get("spread_consensus")),
         "home_stats": team_stats(home_team),
         "away_stats": team_stats(away_team),
         "home_qb": player_table(home_team, ["QB"], ["pass_attempts", "completions", "pass_yards", "carries", "rush_yards", "tds"], top_n=2),
@@ -156,3 +160,26 @@ def _weather_desc(meta: dict) -> str:
     if precip and precip > 0.1:
         parts.append("rain/snow")
     return ", ".join(parts) if parts else "Outdoor"
+
+
+def format_line(home_team: str, away_team: str, home_margin) -> str:
+    """Sportsbook-style line from the home team's expected margin: 'BAL -11.5'."""
+    if home_margin is None or pd.isna(home_margin):
+        return "N/A"
+    m = round(float(home_margin) * 2) / 2  # nearest half point
+    if m == 0:
+        return "Pick'em"
+    fav = home_team if m > 0 else away_team
+    return f"{fav} -{abs(m):g}"
+
+
+def format_kickoff(gameday, gametime_local) -> str:
+    """'Sun Oct 4, 1:00 PM ET' from nflverse gameday + gametime (US Eastern)."""
+    if gameday is None or (not isinstance(gameday, str) and pd.isna(gameday)):
+        return ""
+    day = pd.to_datetime(gameday)
+    text = f"{day:%a} {day:%b} {day.day}"
+    if isinstance(gametime_local, str) and ":" in gametime_local:
+        h, m = (int(x) for x in gametime_local.split(":")[:2])
+        text += f", {(h - 1) % 12 + 1}:{m:02d} {'AM' if h < 12 else 'PM'} ET"
+    return text

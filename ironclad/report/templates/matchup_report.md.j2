@@ -13,7 +13,7 @@
 | **Score Range (80%)** | {{ away_score_range }} | {{ home_score_range }} |
 | **Projected Total** | {{ total_projected }} pts | |
 | **Total Range (80%)** | {{ total_range }} | |
-| **Implied Spread** | {% if spread_implied > 0 %}{{ away_team }} -{{ spread_implied }}{% elif spread_implied < 0 %}{{ home_team }} +{{ spread_implied | abs }}{% else %}Pick 'em{% endif %} | |
+| **Model Line** | {{ model_line }} | |
 
 ---
 

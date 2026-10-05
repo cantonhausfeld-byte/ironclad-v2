@@ -115,3 +115,22 @@ def test_dome_weather_desc():
     result = _make_result()
     ctx = build_report_context(result, {**_GAME_META, "is_dome": True}, _CUTOFF)
     assert "dome" in ctx["weather_desc"].lower() or "indoor" in ctx["weather_desc"].lower()
+
+
+# ── Line and kickoff formatting ───────────────────────────────────────────────
+
+def test_format_line_shows_favorite_with_minus():
+    from ironclad.report.builder import format_line
+    assert format_line("BAL", "TEN", 11.5) == "BAL -11.5"   # home favored (silver convention)
+    assert format_line("BAL", "TEN", -3.0) == "TEN -3"
+    assert format_line("BAL", "TEN", 12.87) == "BAL -13"     # nearest half point
+    assert format_line("BAL", "TEN", 0.1) == "Pick'em"
+    assert format_line("BAL", "TEN", None) == "N/A"
+
+
+def test_format_kickoff_eastern_time():
+    from ironclad.report.builder import format_kickoff
+    assert format_kickoff("2026-10-04", "13:00") == "Sun Oct 4, 1:00 PM ET"
+    assert format_kickoff("2026-10-01", "20:15") == "Thu Oct 1, 8:15 PM ET"
+    assert format_kickoff("2026-10-04", "09:30") == "Sun Oct 4, 9:30 AM ET"
+    assert format_kickoff("2026-10-04", None) == "Sun Oct 4"

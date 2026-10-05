@@ -43,8 +43,8 @@
   <tr><td><strong>Projected Score</strong></td><td>{{ away_score }}</td><td>{{ home_score }}</td></tr>
   <tr><td><strong>Score Range (80%)</strong></td><td>{{ away_score_range }}</td><td>{{ home_score_range }}</td></tr>
   <tr><td><strong>Projected Total</strong></td><td colspan="2">{{ total_projected }} pts ({{ total_range }})</td></tr>
-  <tr><td><strong>Implied Spread</strong></td><td colspan="2">
-    {% if spread_implied > 0 %}{{ away_team }} -{{ spread_implied }}{% elif spread_implied < 0 %}{{ home_team }} +{{ spread_implied | abs }}{% else %}Pick 'em{% endif %}
+  <tr><td><strong>Model Line</strong></td><td colspan="2">
+    {{ model_line }}
   </td></tr>
 </table>
 
