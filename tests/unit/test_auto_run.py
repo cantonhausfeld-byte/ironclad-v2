@@ -51,3 +51,18 @@ def test_reports_and_posts_every_game_without_props(conn, tmp_path):
     assert write.call_count == 2
     assert {c.kwargs["game_id"] for c in post.call_args_list} == {"2026_05_TEN_BAL", "2026_05_KC_LV"}
     assert all(c.kwargs["top_edges_df"] is None for c in post.call_args_list)
+
+
+def test_missing_odds_key_skips_odds_instead_of_failing(conn, tmp_path):
+    with (
+        patch("ironclad.workflow.auto_run.get_connection", return_value=conn),
+        patch("ironclad.workflow.weekly.WeeklyWorkflow") as weekly,
+        patch("ironclad.ingest.injuries.InjuryIngestor"),
+        patch("ironclad.config.ODDS_API_KEY", ""),
+        patch("ironclad.ingest.odds.OddsIngestor") as odds,
+    ):
+        weekly.return_value.run.return_value = {}
+        out = AutoRunWorkflow(output_dir=tmp_path).run(season=2026, week=5)
+
+    odds.assert_not_called()
+    assert out["odds_rows"] == 0

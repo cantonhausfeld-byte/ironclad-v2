@@ -1,0 +1,116 @@
+# Weekly NFL pipeline on GitHub Actions.
+#
+# The DuckDB store and trained models (data/, ~200 MB) persist between runs in
+# the Actions cache. If the cache is missing (first run, or evicted after 7
+# days unused) the job rebuilds it: full 2016..current backfill + training,
+# about 1.5-2 hours.
+#
+# Schedule (UTC; ET = UTC-4 in season):
+#   Tue 11:17  post-game: ingest last week, rebuild features/targets, settle edges
+#   Wed 14:17  pre-game: odds, injuries, simulate + report every game -> Discord
+#   Sat 14:17  injury update: re-simulate + re-report remaining games with
+#              Friday's final injury designations (no odds call, saves quota)
+#   February   the Tue/Wed runs also trigger the end-of-season retrain
+#
+# Repository secrets: ODDS_API_KEY, DISCORD_WEBHOOK_URL (both optional; without
+# the key reports still run, without the webhook nothing is posted).
+
+name: Weekly pipeline
+
+on:
+  schedule:
+    - cron: "17 11 * * 2"
+    - cron: "17 14 * * 3"
+    - cron: "17 14 * * 6"
+  workflow_dispatch:
+    inputs:
+      job:
+        description: "What to run"
+        type: choice
+        default: scheduled
+        options:
+          - scheduled      # whatever the scheduler says is due right now
+          - pre-game       # simulate + report the upcoming week now
+          - post-game      # backfill the current season now
+          - rebuild        # discard the cached DB and rebuild from scratch
+
+concurrency:
+  group: ironclad-pipeline
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      JOB: ${{ github.event_name == 'workflow_dispatch' && inputs.job || 'scheduled' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e .
+
+      - name: Restore data store
+        if: env.JOB != 'rebuild'
+        uses: actions/cache/restore@v4
+        with:
+          path: data/
+          key: ironclad-data-${{ github.run_id }}
+          restore-keys: ironclad-data-
+
+      - name: Bootstrap data store if missing
+        run: |
+          if [ -f data/ironclad.ddb ] && [ -d data/models/game_outcome ]; then
+            echo "Data store restored from cache"; exit 0
+          fi
+          season=$(python -c "from ironclad.workflow.scheduler import detect_nfl_season; print(detect_nfl_season())")
+          echo "Bootstrapping 2016..$season"
+          args=""; for s in $(seq 2016 "$season"); do args="$args -s $s"; done
+          ironclad backfill $args
+          ironclad train --train-seasons "2016-$((season - 2))" --val-seasons "$((season - 1))"
+
+      - name: Run job
+        run: |
+          case "$JOB" in
+            scheduled)
+              if [ "$(date -u +%u)" = "6" ]; then
+                ironclad run --no-odds        # Saturday injury update
+              else
+                ironclad schedule --once
+              fi ;;
+            pre-game)  ironclad run ;;
+            post-game)
+              season=$(python -c "from ironclad.workflow.scheduler import detect_nfl_season; print(detect_nfl_season())")
+              ironclad backfill --season "$season" ;;
+            rebuild)   echo "Rebuilt in bootstrap step" ;;
+          esac
+
+      - name: Status
+        if: always()
+        run: ironclad status || true
+
+      - name: Save data store
+        if: always() && hashFiles('data/ironclad.ddb') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: data/
+          key: ironclad-data-${{ github.run_id }}
+
+      - name: Upload reports
+        if: always() && hashFiles('reports/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports-${{ github.run_id }}
+          path: reports/
+          retention-days: 30

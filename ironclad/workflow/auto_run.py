@@ -73,7 +73,12 @@ class AutoRunWorkflow:
             logger.warning("Injury refresh failed (continuing): %s", exc)
 
         odds_rows = 0
-        if not self.skip_odds:
+        from ironclad import config as _cfg
+        if not self.skip_odds and not _cfg.ODDS_API_KEY:
+            # Reports don't need odds; only prop edges do. Don't let a missing
+            # key block the week's reports (`ironclad odds` still hard-fails).
+            logger.warning("ODDS_API_KEY not set: skipping odds/props; reports only")
+        elif not self.skip_odds:
             from ironclad.ingest.odds import OddsIngestor
             try:
                 odds_rows = OddsIngestor(writer=writer, conn=conn).ingest()
@@ -109,7 +114,6 @@ class AutoRunWorkflow:
         edges_saved = 0
         skipped: list[str] = []
 
-        from ironclad import config as _cfg
         _discord_enabled = bool(_cfg.DISCORD_WEBHOOK_URL)
 
         reports_written = 0

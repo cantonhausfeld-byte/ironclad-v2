@@ -60,11 +60,25 @@ ironclad settle-week --season 2026 --week 4   # grade last week's edges
 ironclad results             # P&L summary
 ```
 
-For unattended operation, run `ironclad schedule` under systemd
-(`deploy/ironclad-scheduler.service`) or cron (`deploy/ironclad.cron`):
-- **Tuesday 6am:** post-game backfill.
-- **Wednesday 10am:** pre-game run.
-- **February:** end-of-season retrain.
+### Unattended (GitHub Actions)
+
+`.github/workflows/weekly.yml` runs the pipeline on GitHub's servers:
+
+- **Tuesday:** post-game backfill.
+- **Wednesday:** pre-game run. Every game gets a report, posted to Discord.
+- **Saturday:** injury update. Remaining games are re-simulated and re-reported with Friday's final designations.
+- **February:** retrain.
+
+The DuckDB store persists between runs in the Actions cache, and the first run (or one after a cache eviction)
+rebuilds it in about 1.5–2 hours. Reports are also uploaded as run artifacts.
+
+Setup: in the GitHub repo, go to **Settings → Secrets and variables → Actions** and add `ODDS_API_KEY` and
+`DISCORD_WEBHOOK_URL`. Both are optional: without the key you still get reports but no odds or prop edges, and
+without the webhook nothing is posted. You can run it by hand from the Actions tab (**Weekly pipeline → Run
+workflow**) and choose `scheduled`, `pre-game`, `post-game` or `rebuild`.
+
+To self-host instead, run `ironclad schedule` under systemd (`deploy/ironclad-scheduler.service`) or cron
+(`deploy/ironclad.cron`).
 
 ## Evaluating the models
 
