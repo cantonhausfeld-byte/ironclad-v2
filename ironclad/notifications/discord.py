@@ -59,7 +59,7 @@ def post_run_summary(result: dict, conn=None) -> None:
 
     if result["skipped"]:
         fields.append({
-            "name": f"Skipped ({len(result['skipped'])})",
+            "name": f"Failed ({len(result['skipped'])})",
             "value": "\n".join(result["skipped"][:5]),
             "inline": False,
         })

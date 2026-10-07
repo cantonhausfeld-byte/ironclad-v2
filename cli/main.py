@@ -505,9 +505,14 @@ def run_weekly(season, week, n_draws, kelly_fraction, min_ev, no_odds, historica
         f"Simulations:      ✓ {gs}/{gt} games"
         + (f" ({skipped_count} skipped)" if skipped_count else "")
     )
-    click.echo(f"Edges saved:      ✓ {result['edges_saved']} → gold.betting_edges")
+    click.echo(f"Reports written:  ✓ {result.get('reports_written', 0)}")
+    no_props = result.get("no_props", [])
+    click.echo(
+        f"Edges saved:      ✓ {result['edges_saved']} → gold.betting_edges"
+        + (f" ({len(no_props)} games had no prop lines)" if no_props else "")
+    )
     if result["skipped"]:
-        click.echo("Skipped:")
+        click.echo("Failed:")
         for item in result["skipped"]:
             click.echo(f"  - {item}")
     click.echo("\nRun `ironclad serve` to view edges in the dashboard.")

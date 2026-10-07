@@ -117,6 +117,7 @@ class AutoRunWorkflow:
         _discord_enabled = bool(_cfg.DISCORD_WEBHOOK_URL)
 
         reports_written = 0
+        no_props: list[str] = []
         for game_id in games_df["game_id"].tolist():
             try:
                 wf = MatchupWorkflow(n_draws=self.n_draws)
@@ -139,7 +140,7 @@ class AutoRunWorkflow:
                         ids = save_edges(conn, game_id, self.n_draws, edges_df)
                         edges_saved += len(ids)
                 else:
-                    skipped.append(f"{game_id} (no props in DB; report only)")
+                    no_props.append(game_id)
 
                 if _discord_enabled:
                     try:
@@ -178,6 +179,7 @@ class AutoRunWorkflow:
             "games_total": len(games_df),
             "games_simulated": games_simulated,
             "reports_written": reports_written,
+            "no_props": no_props,
             "edges_saved": edges_saved,
             "skipped": skipped,
         }
