@@ -10,7 +10,11 @@
 #   Wed 14:17  pre-game: odds, injuries, simulate + report every game -> Discord
 #   Sat 14:17  injury update: re-simulate + re-report remaining games with
 #              Friday's final injury designations (no odds call, saves quota)
-#   February   the Tue/Wed runs also trigger the end-of-season retrain
+#   Feb 15     end-of-season retrain (after the Tuesday backfills)
+#
+# Scheduled runs pick their job from WHICH cron fired, not the clock: GitHub
+# often starts scheduled runs hours late, and a weekday check would skip the
+# pre-game run if it slipped past midnight UTC.
 #
 # Repository secrets: ODDS_API_KEY, DISCORD_WEBHOOK_URL (both optional; without
 # the key reports still run, without the webhook nothing is posted).
@@ -19,9 +23,10 @@ name: Weekly pipeline
 
 on:
   schedule:
-    - cron: "17 11 * * 2"
-    - cron: "17 14 * * 3"
-    - cron: "17 14 * * 6"
+    - cron: "17 11 * * 2"     # post-game
+    - cron: "17 14 * * 3"     # pre-game
+    - cron: "17 14 * * 6"     # injury update
+    - cron: "17 12 15 2 *"    # end-of-season retrain
   workflow_dispatch:
     inputs:
       job:
@@ -29,9 +34,10 @@ on:
         type: choice
         default: scheduled
         options:
-          - scheduled      # whatever the scheduler says is due right now
+          - scheduled      # manual: whatever the scheduler says is due right now
           - pre-game       # simulate + report the upcoming week now
           - post-game      # backfill the current season now
+          - injury-update  # re-simulate remaining games without an odds call
           - rebuild        # discard the cached DB and rebuild from scratch
 
 concurrency:
@@ -49,6 +55,7 @@ jobs:
       ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
       JOB: ${{ github.event_name == 'workflow_dispatch' && inputs.job || 'scheduled' }}
+      CRON: ${{ github.event.schedule }}
     steps:
       - uses: actions/checkout@v4
 
@@ -82,19 +89,35 @@ jobs:
 
       - name: Run job
         run: |
+          season=$(python -c "from ironclad.workflow.scheduler import detect_nfl_season; print(detect_nfl_season())")
+          if [ "$JOB" = "scheduled" ]; then
+            case "$CRON" in
+              "17 11 * * 2")  JOB=post-game ;;
+              "17 14 * * 3")  JOB=pre-game ;;
+              "17 14 * * 6")  JOB=injury-update ;;
+              "17 12 15 2 *") JOB=retrain ;;
+              "") JOB=auto ;;   # manual dispatch: let the scheduler decide
+              *) echo "Unknown schedule '$CRON'"; exit 1 ;;
+            esac
+          fi
+          echo "Running $JOB (season $season)"
           case "$JOB" in
-            scheduled)
-              if [ "$(date -u +%u)" = "6" ]; then
-                ironclad run --no-odds        # Saturday injury update
-              else
-                ironclad schedule --once
-              fi ;;
-            pre-game)  ironclad run ;;
-            post-game)
-              season=$(python -c "from ironclad.workflow.scheduler import detect_nfl_season; print(detect_nfl_season())")
-              ironclad backfill --season "$season" ;;
-            rebuild)   echo "Rebuilt in bootstrap step" ;;
+            post-game)     ironclad backfill --season "$season" ;;
+            pre-game)      ironclad run ;;
+            injury-update) ironclad run --no-odds ;;
+            retrain)
+              ironclad backfill --season "$season"
+              ironclad train --train-seasons "2016-$((season - 1))" --val-seasons "$season" ;;
+            auto)          ironclad schedule --once ;;
+            rebuild)       echo "Rebuilt in bootstrap step" ;;
+            *) echo "Unknown job '$JOB'"; exit 1 ;;
           esac
+
+      - name: Alert Discord on failure
+        if: failure() && env.DISCORD_WEBHOOK_URL != ''
+        run: |
+          msg="🚨 ironclad weekly pipeline failed ($JOB${CRON:+, schedule $CRON}): ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          curl -sS -H "Content-Type: application/json" -d "$(python -c 'import json,sys; print(json.dumps({"content": sys.argv[1]}))' "$msg")" "$DISCORD_WEBHOOK_URL" || true
 
       - name: Status
         if: always()

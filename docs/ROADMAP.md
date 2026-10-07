@@ -86,7 +86,7 @@ Port each item separately. Keep a feature only if walk-forward log-loss and the 
 
 ## Phase 5 — Deploy and operate (1 week)
 
-- [x] 5.1 Host: GitHub Actions (`.github/workflows/weekly.yml`): Tue/Wed/Sat crons, DB persisted in the Actions cache, self-bootstraps if the cache is missing. Needs repo secrets `ODDS_API_KEY` and `DISCORD_WEBHOOK_URL`.
+- [x] 5.1 Host: GitHub Actions (`.github/workflows/weekly.yml`): Tue/Wed/Sat (+Feb 15) crons, job chosen by which cron fired (scheduled runs are often hours late), DB persisted in the Actions cache, self-bootstraps if the cache is missing. Needs repo secrets `ODDS_API_KEY` and `DISCORD_WEBHOOK_URL`.
 - [ ] 5.2 Nightly DB backup (DuckDB `EXPORT DATABASE` or file copy after checkpoint), keeping 14 days.
 - [~] 5.3 Failure alerting: done — scheduler job exceptions post to Discord and retry at most 3×/week (previously silent, retried every 15 min and burned Odds API quota). Still to do: a weekly heartbeat post.
 - [ ] 5.4 Store model artifacts off-host (versioned). Pin the model used for each week's report in the DB.
